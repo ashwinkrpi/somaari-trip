@@ -13,7 +13,7 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 - `shared/types.ts`: API types used by both server and client; `shared/format.ts`: `formatDuration`
 - `server/*.test.ts`: vitest tests (`app.test.ts` runs the app on a random port)
 - `src/utils/time.ts`: IST formatting, mode/speed colors
-- `docs/USER_GUIDE.md` + `docs/images/`: end-user guide; screenshots taken from a `SEED_SAMPLE_DATA=true` server only. Update both when the UI changes
+- `docs/GUIDE.md` + `docs/images/`: installation, configuration (settings, login, Overland, CSV format) and user guide; README keeps overview, architecture, security, API, development; screenshots taken from a `SEED_SAMPLE_DATA=true` server only. Update both when the UI changes
 - Docker: one `Dockerfile` (build stage bundles server + deps into `dist/server.cjs`; runtime is `alpine` + stripped Node binary, no `node_modules`). `docker-compose.yml` has one service `somaari-trip` as uid `INGEST_UID` (default 1001), host `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default 127.0.0.1:18473) → :3000, `DATA_DIR` rw, `tile-cache` volume, read-only root fs, no healthcheck
 
 ## Commands
@@ -27,7 +27,7 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 ## Data
 - Files: `data/trips_YYYY-MM-DD.csv` (dev) or the host dir in `DATA_DIR` (`.env`) mounted rw (prod)
 - Timestamps are UTC ISO; the UI shows IST. API days are IST days. Files are named by **IST** date (all existing files checked); `loadPointsForIstRange` reads only files in the range and still filters per point.
-- Columns: see README. Overland reports `speed=-1` when speed is unknown.
+- Columns: see `docs/GUIDE.md` (Data files). Overland reports `speed=-1` when speed is unknown.
 
 ## Conventions
 - TypeScript, 2-space indent, single quotes, Tailwind classes inline, lucide-react icons
