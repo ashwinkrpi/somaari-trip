@@ -108,7 +108,7 @@ The [guide](docs/GUIDE.md) covers each step in detail:
 | Layers button on the map | OpenStreetMap, CartoDB Dark or Voyager (remembered) |
 | **↻** next to the title | Loads points uploaded since you opened the page |
 
-Everything else, with screenshots: [Using the app](docs/GUIDE.md#3-using-the-app).
+Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app).
 
 ## 🧠 How it works
 
