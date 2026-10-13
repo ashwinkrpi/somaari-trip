@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400">
+  <title>somaari-trip — a self-hosted GPS route viewer for Overland iOS</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0a0a"/>
+      <stop offset="1" stop-color="#171717"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.8" cy="0.35" r="0.55">
+      <stop offset="0" stop-color="#6366f1" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#a3a3a3" fill-opacity="0.06"/>
+    </pattern>
+    <clipPath id="map">
+      <path d="M0 40 H616 V258 a14 14 0 0 1 -14 14 H14 a14 14 0 0 1 -14 -14 Z"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1280" height="400" rx="20" fill="url(#bg)"/>
+  <rect width="1280" height="400" rx="20" fill="url(#dots)"/>
+  <rect width="1280" height="400" rx="20" fill="url(#glow)"/>
+
+  <!-- left: logo (compass, as in the app header) + wordmark -->
+  <g transform="translate(72 96)">
+    <rect width="96" height="96" rx="22" fill="url(#logo)"/>
+    <circle cx="48" cy="48" r="28" fill="none" stroke="#ffffff" stroke-width="6"/>
+    <path d="M60 36 L54 54 L36 60 L42 42 Z" fill="none" stroke="#ffffff" stroke-width="6" stroke-linejoin="round"/>
+  </g>
+  <text x="72" y="248" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="64" font-weight="700" fill="#e5e5e5" letter-spacing="-1">somaari<tspan fill="#10b981">-trip</tspan></text>
+  <text x="74" y="294" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="22" fill="#a3a3a3">Self-hosted GPS routes from Overland iOS.</text>
+  <text x="74" y="328" font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="22" fill="#a3a3a3">Your location history, on your own server.</text>
+
+  <!-- right: app window with a stylised map -->
+  <g transform="translate(600 64)">
+    <rect width="616" height="272" rx="14" fill="#141414" stroke="#2e2e2e"/>
+    <!-- stats bar -->
+    <path d="M0 14 a14 14 0 0 1 14 -14 h588 a14 14 0 0 1 14 14 v26 h-616 z" fill="#1c1c1c"/>
+    <circle cx="22" cy="20" r="5" fill="#10b981"/>
+    <g font-family="DejaVu Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="14">
+      <text x="36" y="25" fill="#e5e5e5" font-weight="700">2026-08-30</text>
+      <text x="150" y="25" fill="#a3a3a3">Dist <tspan fill="#e5e5e5" font-weight="700">17.9 km</tspan></text>
+      <text x="268" y="25" fill="#a3a3a3">Time <tspan fill="#e5e5e5" font-weight="700">1h 4m</tspan></text>
+      <text x="374" y="25" fill="#a3a3a3">Trips <tspan fill="#e5e5e5" font-weight="700">3</tspan></text>
+      <text x="452" y="25" fill="#a3a3a3">Stops <tspan fill="#e5e5e5" font-weight="700">2</tspan></text>
+    </g>
+
+    <g clip-path="url(#map)">
+      <!-- blocks and streets -->
+      <rect x="0" y="40" width="616" height="232" fill="#1a1d21"/>
+      <g stroke="#262a30" stroke-width="2">
+        <path d="M0 96 H616 M0 160 H616 M0 222 H616"/>
+        <path d="M90 40 V272 M210 40 V272 M330 40 V272 M450 40 V272 M560 40 V272"/>
+      </g>
+      <g stroke="#30353d" stroke-width="7" fill="none" stroke-linecap="round">
+        <path d="M-10 250 C 120 230, 220 140, 360 120 S 560 70, 640 60"/>
+        <path d="M260 40 C 270 120, 250 200, 290 290"/>
+      </g>
+      <path d="M470 180 q 40 -20 90 10 t 70 40 V272 H450 Z" fill="#14213a"/>
+      <path d="M40 50 h80 v34 h-80 z" fill="#1d2a22"/>
+
+      <!-- routes: cycling (cyan), driving loop (amber), walking (emerald) -->
+      <path d="M70 248 L150 196 L230 150 L292 120" fill="none" stroke="#06b6d4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M352 152 C 300 140, 300 70, 360 64 S 470 90, 468 132" fill="none" stroke="#f59e0b" stroke-width="5" stroke-linecap="round"/>
+      <path d="M380 156 L 420 140" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round"/>
+
+      <!-- start (green), end (red), stops (purple) -->
+      <g stroke="#ffffff" stroke-width="2.5">
+        <circle cx="70" cy="248" r="7" fill="#10b981"/>
+        <circle cx="292" cy="120" r="7" fill="#ef4444"/>
+        <circle cx="352" cy="152" r="7" fill="#10b981"/>
+        <circle cx="468" cy="132" r="7" fill="#ef4444"/>
+        <circle cx="380" cy="156" r="7" fill="#10b981"/>
+      </g>
+      <circle cx="190" cy="172" r="10" fill="#ffffff"/>
+      <circle cx="190" cy="172" r="7" fill="#8b5cf6"/>
+      <circle cx="190" cy="172" r="3" fill="#ffffff"/>
+      <circle cx="420" cy="140" r="10" fill="#ffffff"/>
+      <circle cx="420" cy="140" r="7" fill="#8b5cf6"/>
+      <circle cx="420" cy="140" r="3" fill="#ffffff"/>
+
+      <!-- map controls -->
+      <rect x="566" y="54" width="34" height="34" rx="8" fill="#171717" stroke="#2e2e2e"/>
+      <path d="M583 63 l9 5 -9 5 -9 -5 z M574 73 l9 5 9 -5" fill="none" stroke="#d4d4d4" stroke-width="2" stroke-linejoin="round"/>
+      <rect x="566" y="96" width="34" height="34" rx="8" fill="#171717" stroke="#2e2e2e"/>
+      <path d="M592 105 L576 112 L584 114 L586 122 Z" fill="none" stroke="#d4d4d4" stroke-width="2" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>
