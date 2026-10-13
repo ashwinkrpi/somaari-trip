@@ -1,0 +1,43 @@
+name: somaari-trip
+
+services:
+  # One Node process: basic auth, static frontend, /api, Overland ingest, map tile cache
+  somaari-trip:
+    build:
+      context: .
+      args:
+        APP_UID: ${INGEST_UID:-1001}
+        APP_GID: ${INGEST_GID:-1001}
+    image: somaari-trip
+    container_name: somaari-trip
+    restart: unless-stopped
+    # Host user that owns the CSV files, so appended files keep the same owner
+    user: "${INGEST_UID:-1001}:${INGEST_GID:-1001}"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Small young generation: ~20 MB less RSS after parsing, ~3% slower
+      - NODE_OPTIONS=--max-old-space-size=96 --max-semi-space-size=4
+      - AUTH_USER=${AUTH_USER:?set AUTH_USER and AUTH_HASH in .env (npm run hash-password)}
+      - AUTH_HASH=${AUTH_HASH:?set AUTH_USER and AUTH_HASH in .env (npm run hash-password)}
+      - OVERLAND_TOKEN=${OVERLAND_TOKEN:?set OVERLAND_TOKEN in .env}
+    ports:
+      # Localhost-only by default (Docker-published ports bypass ufw).
+      # Set SOMAARI_TRIP_BIND to your LAN, Tailscale or ZeroTier IP to reach it from other devices.
+      - "${SOMAARI_TRIP_BIND:-127.0.0.1}:${SOMAARI_TRIP_PORT:-18473}:3000"
+    volumes:
+      # Daily CSV trip directory. Set DATA_DIR in .env (default ./data)
+      - ${DATA_DIR:-./data}:/app/data
+      # Map tile cache, kept across rebuilds
+      - tile-cache:/app/cache/tiles
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # No healthcheck: nothing acts on it, and restart covers crashes
+
+volumes:
+  tile-cache:
