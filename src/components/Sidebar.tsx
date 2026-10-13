@@ -100,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       className="w-80 md:w-96 h-full bg-neutral-950/95 border-r border-neutral-800/90 flex flex-col shrink-0 z-20 select-none overflow-hidden"
     >
       {/* Header */}
-      <div className="px-4 py-3.5 border-b border-neutral-800/80 flex items-center justify-between">
+      <div className="pl-14 pr-4 md:px-4 py-3.5 border-b border-neutral-800/80 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center shadow-md">
             <Compass className="w-4 h-4 text-white" />

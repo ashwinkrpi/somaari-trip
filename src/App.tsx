@@ -220,7 +220,7 @@ export default function App() {
   const selectedTrip = visibleTrips.find(f => f.properties.trip_id === selectedTripId);
   return (
     <div className="flex h-screen w-screen bg-neutral-950 text-neutral-100 overflow-hidden font-sans">
-      {/* Mobile Menu Button */}
+      {/* Mobile Menu Button: the stats bar and sidebar header reserve pl-14 for it below md */}
       <button
         type="button"
         onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}

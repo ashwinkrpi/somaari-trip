@@ -13,7 +13,7 @@ export const TripStatsBar: React.FC<TripStatsBarProps> = ({ summary, dateLabel, 
   return (
     <div
       id="trip-stats-bar"
-      className="bg-neutral-900/90 border-b border-neutral-800/80 px-4 py-2.5 backdrop-blur-md flex items-center justify-between gap-4 flex-wrap z-10"
+      className="bg-neutral-900/90 border-b border-neutral-800/80 pl-14 pr-4 md:px-4 py-2.5 backdrop-blur-md flex items-center justify-between gap-4 flex-wrap z-10"
     >
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
