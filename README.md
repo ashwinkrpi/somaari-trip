@@ -2,6 +2,10 @@
 
 Somaari Trip is a self-hosted, lightweight GPS route viewer tailored for personal trip logs collected by **Overland iOS**, which posts straight to the app. It runs statelessly on flat daily CSV files with no database requirements, rendering trips in **IST (Asia/Kolkata, UTC+5:30)** on OpenStreetMap tiles with zero external API key dependencies.
 
+![Somaari Trip: day list, trip stats and routes on the map (sample data)](docs/images/overview.jpg)
+
+📖 **Using the app:** see the [user guide](docs/USER_GUIDE.md) for picking days and ranges, trips, stops, display settings and troubleshooting.
+
 ---
 
 ## 🔄 How It Works
@@ -64,6 +68,8 @@ docker compose up -d --build
 ```
 
 Access the web interface at **`http://<server-ip>:<SOMAARI_TRIP_PORT>`** (default port 18473), where `<server-ip>` is `SOMAARI_TRIP_BIND`, or with `0.0.0.0` any of the machine's IPs: its LAN IP on home wifi, its ZeroTier/Tailscale IP from anywhere. In dev mode it's `http://localhost:3000`, which only listens on localhost.
+
+Next: the [user guide](docs/USER_GUIDE.md) walks through the interface.
 
 > Docker-published ports bypass `ufw`. Don't port-forward this port to the internet; use ZeroTier/Tailscale/WireGuard for remote access.
 

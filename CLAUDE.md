@@ -13,6 +13,7 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 - `shared/types.ts`: API types used by both server and client; `shared/format.ts`: `formatDuration`
 - `server/*.test.ts`: vitest tests (`app.test.ts` runs the app on a random port)
 - `src/utils/time.ts`: IST formatting, mode/speed colors
+- `docs/USER_GUIDE.md` + `docs/images/`: end-user guide; screenshots taken from a `SEED_SAMPLE_DATA=true` server only. Update both when the UI changes
 - Docker: one `Dockerfile` (build stage bundles server + deps into `dist/server.cjs`; runtime is `alpine` + stripped Node binary, no `node_modules`). `docker-compose.yml` has one service `somaari-trip` as uid `INGEST_UID` (default 1001), host `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default 127.0.0.1:18473) → :3000, `DATA_DIR` rw, `tile-cache` volume, read-only root fs, no healthcheck
 
 ## Commands
@@ -36,4 +37,4 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 - The repo is meant to be public: test fixtures, screenshots and docs use synthetic data only (never a real CSV row, Overland payload or coordinate), and host-specific details (IPs, paths) stay in `.env` or `plans/`
 
 ## Work in progress
-Plans live in `plans/` (gitignored, local only; absent in a fresh clone). `GO_PUBLIC.md` is next (stage 1 done, then squash history and publish as a new repo). `INGEST_PLAN.md` is done except the phone cutover; `IMPROVEMENT_PLAN.md` and `REDESIGN_PLAN.md` are done except optional items. Work stage by stage, tick items off. Read only the files an item names.
+Plans live in `plans/` (gitignored, local only; absent in a fresh clone). The repo is public (`origin`, history squashed); full private history is in remote `private`, never push `main` there. `INGEST_PLAN.md` is done except the phone cutover; `IMPROVEMENT_PLAN.md` and `REDESIGN_PLAN.md` are done except optional items. Work stage by stage, tick items off. Read only the files an item names.
