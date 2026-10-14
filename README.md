@@ -63,28 +63,8 @@ from plain daily CSV files: no cloud, no database, no API keys.
 
 ## 🚀 Install
 
-**Requirements:** a Linux machine that stays on (Raspberry Pi 5 or any x86_64 server), Docker
-with the Compose plugin, Node.js 20+ to create the login, and Overland on your iPhone.
-
-```sh
-git clone https://github.com/ashwinkrpi/somaari-trip.git
-cd somaari-trip
-npm ci && npm run -s hash-password -- <user> >> .env   # login (prompts for the password)
-echo "OVERLAND_TOKEN=$(openssl rand -hex 32)" >> .env    # token for the phone
-echo "SOMAARI_TRIP_BIND=0.0.0.0" >> .env                 # reachable from your LAN and VPN
-echo "DATA_DIR=/path/to/gps-logs" >> .env                # where the daily CSVs live
-docker compose up -d --build
-```
-
-Open `http://<server-ip>:18473`, sign in, then point Overland at
-`http://<server-ip>:18473/api/overland` with the token.
-
-<details>
-<summary><b>Step by step, settings, Overland and updating</b></summary>
-
-<br>
-
-The [guide](docs/GUIDE.md) covers each step in detail:
+You need a Linux machine that stays on (Raspberry Pi 5 or any x86_64 server), Docker with the
+Compose plugin, and Overland on your iPhone. The [guide](docs/GUIDE.md) covers the rest:
 - [Install with Docker](docs/GUIDE.md#install-with-docker) and
   [who can reach it](docs/GUIDE.md#who-can-reach-it) (LAN, ZeroTier/Tailscale, reboots)
 - [Settings](docs/GUIDE.md#settings): every `.env` option and its default
@@ -92,8 +72,6 @@ The [guide](docs/GUIDE.md) covers each step in detail:
 - [Overland (iPhone)](docs/GUIDE.md#overland-iphone): app settings and checking uploads arrive
 - [Data files](docs/GUIDE.md#data-files): CSV format, ownership, backups
 - [Updating](docs/GUIDE.md#updating) and [trying it with sample data](docs/GUIDE.md#try-it-with-sample-data)
-
-</details>
 
 ## 🧑‍💻 Usage
 
