@@ -222,6 +222,12 @@ proxies tiles. `AUTH_USER`/`AUTH_HASH` in the shell turn the login on in dev too
 TypeScript, Express, React, Leaflet, Tailwind CSS and PapaParse. Screenshots in `docs/images/`
 are taken from sample data only, never real location history.
 
+## 🤝 Contributing
+
+This is a personal project and doesn't accept pull requests. You're welcome to fork it and adapt
+it for yourself, and bug reports in [Issues](https://github.com/ashwinkrpi/somaari-trip/issues)
+are appreciated.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
