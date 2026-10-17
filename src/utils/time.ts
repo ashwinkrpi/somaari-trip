@@ -52,11 +52,6 @@ export function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(2)} km`;
 }
 
-export function formatSpeed(mps: number): string {
-  if (!mps || mps <= 0) return '0 km/h';
-  return `${(mps * 3.6).toFixed(1)} km/h`;
-}
-
 export const MODE_COLORS: Record<string, { bg: string; border: string; hex: string; label: string }> = {
   walking: { bg: 'bg-emerald-500/15', border: 'border-emerald-500/40', hex: '#10B981', label: 'Walking' },
   running: { bg: 'bg-teal-500/15', border: 'border-teal-500/40', hex: '#14B8A6', label: 'Running' },
