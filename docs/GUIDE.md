@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/banner.svg" alt="somaari-trip — a self-hosted GPS route viewer for Overland iOS" width="100%">
+<img src="images/banner.svg" alt="somaari-trip — a GPS route viewer for Overland iOS" width="100%">
 
 <br>
 
