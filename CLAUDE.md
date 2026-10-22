@@ -8,7 +8,7 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 - `server/auth.ts` (scrypt basic auth), `server/rateLimit.ts` (per-IP token buckets), `server/staticFiles.ts` (precompressed `.br`/`.gz` from the Vite build, gzipped JSON), `server/tileProxy.ts` (OpenStreetMap-only tile proxy, `/tiles/osm/<z>/<x>/<y>.png`, with disk cache under `cache/tiles`, prod only)
 - `server/overlandIngest.ts`: Overland payload → IST-dated CSV rows (pure), and the per-file append queue
 - `server/tripParser.ts`: CSV parse, stop detection, trip/segment building, day summaries (pure functions)
-- `server/seedData.ts`: sample CSV generator (only when `SEED_SAMPLE_DATA=true`)
+- `server/seedData.ts`: sample CSV generator (only when `SEED_SAMPLE_DATA=true`); six days of synthetic Bengaluru trips that follow real roads from `server/sampleRoutes.ts` (generated, committed), deterministic so screenshots are repeatable
 - `src/App.tsx`: state and fetching. `src/components/{Sidebar,MapViewer,TripStatsBar}.tsx`
 - `shared/types.ts`: API types used by both server and client; `shared/format.ts`: `formatDuration`
 - `server/*.test.ts`: vitest tests (`app.test.ts` runs the app on a random port)
@@ -21,6 +21,7 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 - `npm run lint`: `tsc --noEmit` (with `noUnusedLocals`)
 - `npm test`: vitest
 - `npm run build`: vite build (with `.br`/`.gz`) + esbuild server → `dist/`
+- `node scripts/sample-routes.mjs`: refetches the sample road geometry into `server/sampleRoutes.ts` from routing.openstreetmap.de (needs internet; only when its waypoints change). Check new routes for spurs and loops before committing
 - `npm run screenshots`: build, then `scripts/screenshots.mjs` retakes `docs/images/*.jpg` (production build on sample data in a temp dir, throwaway login, headless Chromium over DevTools, Self-Hosted badge hidden)
 - `npm run -s hash-password -- <user> >> .env`: append `AUTH_USER`/`AUTH_HASH`
 - `docker compose up -d --build`

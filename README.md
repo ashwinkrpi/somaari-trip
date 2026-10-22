@@ -215,6 +215,7 @@ npm run lint                        # tsc --noEmit
 npm test                            # vitest
 npm run build                       # frontend + bundled server into dist/
 npm run screenshots                 # rebuild, retake docs/images/*.jpg from sample data
+node scripts/sample-routes.mjs      # refetch the sample trips' road geometry (OSM routing, rarely needed)
 ```
 
 The dev server reads `./data` and fetches map tiles directly; production serves `dist/` and

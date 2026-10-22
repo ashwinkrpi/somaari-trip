@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { SAMPLE_ROUTES } from './sampleRoutes.ts';
 
 export function ensureSampleData(dataDir: string) {
   if (process.env.SEED_SAMPLE_DATA !== 'true') {
@@ -19,14 +20,136 @@ export function ensureSampleData(dataDir: string) {
   generateSampleDays(dataDir);
 }
 
+type LatLon = [number, number];
+type Mode = 'driving' | 'cycling' | 'running' | 'walking';
+
+const HEADER = 'timestamp,trip_id,lat,lon,speed_mps,speed_accuracy,course,course_accuracy,altitude_m,vertical_accuracy,accuracy_m,battery_level,battery_state,motion,wifi_ssid,device_id,trip_distance_m,trip_mode,trip_start\n';
+
+// Per mode: seconds between logged points, cruising speed (m/s) and its swing, speed through sharp turns
+const MODES: Record<Mode, { dt: number; speed: number; swing: number; corner: number; motion: string }> = {
+  driving: { dt: 3, speed: 8.5, swing: 4, corner: 4, motion: 'automotive' },
+  cycling: { dt: 3, speed: 4.8, swing: 1.5, corner: 3, motion: 'cycling' },
+  running: { dt: 5, speed: 3.2, swing: 0.6, corner: 2.6, motion: 'running' },
+  walking: { dt: 5, speed: 1.4, swing: 0.15, corner: 1.2, motion: 'walking' },
+};
+
+const RAD = Math.PI / 180;
+
+function metres(a: LatLon, b: LatLon): number {
+  const x = (b[1] - a[1]) * RAD * Math.cos(((a[0] + b[0]) / 2) * RAD);
+  return Math.hypot(x, (b[0] - a[0]) * RAD) * 6371000;
+}
+
+function bearing(a: LatLon, b: LatLon): number {
+  const deg = Math.atan2((b[1] - a[1]) * Math.cos(a[0] * RAD), b[0] - a[0]) / RAD;
+  return (deg + 360) % 360;
+}
+
+/** Small deterministic PRNG (mulberry32) so the sample data and screenshots are the same every run */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+interface RoutePoint {
+  timeMs: number;
+  lat: number;
+  lon: number;
+  speed: number;
+  course: number;
+  along: number; // metres from the start of the route
+  stopped: boolean;
+}
+
+/**
+ * Moves along a road polyline at the mode's speed, logging a point every `dt` seconds, so the
+ * track follows the road. Slows for sharp turns. If `stop` is given, pauses there for `count`
+ * stationary points `interval` seconds apart (a signal, a park bench).
+ */
+function travel(
+  line: LatLon[],
+  mode: Mode,
+  startMs: number,
+  stop?: { along: number; count: number; interval: number },
+): RoutePoint[] {
+  const { dt, speed, swing, corner } = MODES[mode];
+  const cum = [0];
+  for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + metres(line[i - 1], line[i]));
+  const total = cum[cum.length - 1];
+
+  // Distances along the route of turns sharper than 50 degrees
+  const turns: number[] = [];
+  for (let i = 1; i < line.length - 1; i++) {
+    let d = Math.abs(bearing(line[i - 1], line[i]) - bearing(line[i], line[i + 1]));
+    if (d > 180) d = 360 - d;
+    if (d > 50) turns.push(cum[i]);
+  }
+
+  let seg = 0;
+  const at = (s: number) => {
+    while (seg < line.length - 2 && cum[seg + 1] < s) seg++;
+    const len = cum[seg + 1] - cum[seg];
+    const f = len > 0 ? (s - cum[seg]) / len : 0;
+    const [a, b] = [line[seg], line[seg + 1]];
+    return { lat: a[0] + (b[0] - a[0]) * f, lon: a[1] + (b[1] - a[1]) * f, course: bearing(a, b) };
+  };
+  const speedAt = (s: number, t: number) => {
+    const cruise = speed + Math.sin(t / 90) * swing;
+    const nearTurn = turns.some(d => Math.abs(d - s) < 25);
+    return nearTurn ? Math.min(cruise, corner) : cruise;
+  };
+
+  const points: RoutePoint[] = [];
+  let s = 0;
+  let t = 0;
+  let stopDone = !stop;
+  for (;;) {
+    points.push({ timeMs: startMs + t * 1000, ...at(s), speed: speedAt(s, t), along: s, stopped: false });
+    if (s >= total) break;
+    if (stop && !stopDone && s >= stop.along) {
+      stopDone = true;
+      const here = at(s);
+      for (let i = 1; i <= stop.count; i++) {
+        points.push({ timeMs: startMs + (t + i * stop.interval) * 1000, ...here, speed: 0, along: s, stopped: true });
+      }
+      t += (stop.count + 1) * stop.interval;
+      continue;
+    }
+    s = Math.min(total, s + speedAt(s, t) * dt);
+    t += dt;
+  }
+  return points;
+}
+
+function routeLine(key: string): LatLon[] {
+  const route = SAMPLE_ROUTES[key];
+  if (!route) throw new Error(`No sample route ${key}`);
+  return route.line;
+}
+
+/** Metres along a route to its stop: the route's stopIndex, else `fraction` of the way through its vertices */
+function routeStop(key: string, fraction: number): number {
+  const { line, stopIndex } = SAMPLE_ROUTES[key];
+  const end = stopIndex ?? Math.round((line.length - 1) * fraction);
+  let along = 0;
+  for (let i = 1; i <= end; i++) along += metres(line[i - 1], line[i]);
+  return along;
+}
+
 export function generateSampleDays(dataDir: string) {
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
-  // Base coordinates: Bengaluru, India (around MG Road / Indiranagar / Koramangala)
-  // Base Lat: 12.9716, Lon: 77.5946
-  // Days: 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-28, 2026-08-29, 2026-08-30
+  // Bengaluru, India: home in Koramangala, office in Indiranagar. Every trip follows real roads
+  // (server/sampleRoutes.ts, generated from OpenStreetMap by scripts/sample-routes.mjs).
+  // Days: 2026-08-25 to 2026-08-30
 
   const dates = [
     '2026-08-25',
@@ -37,207 +160,108 @@ export function generateSampleDays(dataDir: string) {
     '2026-08-30',
   ];
 
-  const header = 'timestamp,trip_id,lat,lon,speed_mps,speed_accuracy,course,course_accuracy,altitude_m,vertical_accuracy,accuracy_m,battery_level,battery_state,motion,wifi_ssid,device_id,trip_distance_m,trip_mode,trip_start\n';
-
   for (let dIdx = 0; dIdx < dates.length; dIdx++) {
     const dateStr = dates[dIdx];
+    const day = dateStr.replace(/-/g, '');
+    const random = seededRandom(Number(day));
     const rows: string[] = [];
-
-    // Trip 1: Morning Commute (e.g. 08:30 IST -> 03:00 UTC)
-    // Mode: Driving / Cycling / Walking depending on day
-    const trip1Mode = dIdx % 2 === 0 ? 'driving' : 'cycling';
-    const trip1Id = `trip_${dateStr.replace(/-/g, '')}_morning`;
-    const trip1StartTime = new Date(`${dateStr}T03:00:00.000Z`).getTime();
-    
-    let curLat = 12.9352 + (dIdx * 0.002);
-    let curLon = 77.6245 + (dIdx * 0.001);
-    let dist = 0;
     let battery = 0.95 - (dIdx * 0.02);
 
-    // 25 points for morning commute
-    for (let i = 0; i < 25; i++) {
-      const time = new Date(trip1StartTime + i * 45 * 1000).toISOString();
-      const speed = trip1Mode === 'driving' ? 8.5 + Math.sin(i * 0.5) * 4 : 4.8 + Math.cos(i * 0.3) * 1.5;
-      curLat += 0.0008 + (Math.random() * 0.0002 - 0.0001);
-      curLon += 0.0006 + (Math.random() * 0.0002 - 0.0001);
-      dist += Math.round(speed * 45);
-      battery -= 0.001;
-
-      // Stop at a signal midway (points 10, 11, 12, 13)
-      const isSignalStop = i >= 10 && i <= 13;
-      const pointSpeed = isSignalStop ? 0.0 : +speed.toFixed(2);
-      const motion = isSignalStop ? 'stationary' : (trip1Mode === 'driving' ? 'automotive' : 'cycling');
-      const accuracy = 5 + Math.round(Math.random() * 8);
-
+    const pushRow = (
+      p: RoutePoint,
+      tripId: string,
+      mode: Mode,
+      dist: number,
+      opts: { speedAcc: number; courseAcc: number; vertAcc: number; motion: string; wifi: string; batteryState?: string; start: boolean },
+    ) => {
       rows.push([
-        time,
-        trip1Id,
-        curLat.toFixed(6),
-        curLon.toFixed(6),
-        pointSpeed,
-        1.0,
-        Math.round((i * 12) % 360),
-        5.0,
-        915 + Math.round(Math.sin(i) * 10),
-        3.0,
-        accuracy,
-        +battery.toFixed(2),
-        'unplugged',
-        motion,
-        i === 0 ? 'Home_Fiber_5G' : (isSignalStop ? 'TrafficSignal_Mesh' : ''),
-        'sample-device',
-        dist,
-        trip1Mode,
-        i === 0 ? time : '',
-      ].join(','));
-    }
-
-    // Mid-day stationary stop at Cafe / Co-working (office) with a deliberate gap (> 5 min)
-    // 05:00 UTC (10:30 AM IST)
-    const trip2Id = `trip_${dateStr.replace(/-/g, '')}_lunch_walk`;
-    const trip2StartTime = new Date(`${dateStr}T06:30:00.000Z`).getTime();
-    curLat = 12.9650 + (dIdx * 0.001);
-    curLon = 77.6420 + (dIdx * 0.001);
-    dist = 0;
-
-    // First leg of lunch walk
-    for (let i = 0; i < 8; i++) {
-      const time = new Date(trip2StartTime + i * 30 * 1000).toISOString();
-      const speed = 1.3 + Math.random() * 0.3;
-      curLat += 0.0002;
-      curLon += 0.0003;
-      dist += Math.round(speed * 30);
-      battery -= 0.0005;
-
-      rows.push([
-        time,
-        trip2Id,
-        curLat.toFixed(6),
-        curLon.toFixed(6),
-        +speed.toFixed(2),
-        0.5,
-        45,
-        3.0,
-        920,
-        2.0,
-        6,
-        +battery.toFixed(2),
-        'unplugged',
-        'walking',
-        '',
-        'sample-device',
-        dist,
-        'walking',
-        i === 0 ? time : '',
-      ].join(','));
-    }
-
-    // Stationary stop at Cafe (35 minutes gap + stationary points)
-    const cafeStartTime = trip2StartTime + 8 * 30 * 1000 + 1000;
-    for (let i = 0; i < 5; i++) {
-      const time = new Date(cafeStartTime + i * 60 * 1000).toISOString();
-      rows.push([
-        time,
-        trip2Id,
-        curLat.toFixed(6),
-        curLon.toFixed(6),
-        0.0,
-        0.1,
-        0,
-        0,
-        921,
-        2.0,
-        8,
-        +battery.toFixed(2),
-        'charging',
-        'stationary',
-        'ThirdWaveCoffee_Guest',
-        'sample-device',
-        dist,
-        'walking',
-        '',
-      ].join(','));
-    }
-
-    // Walk back (with > 5 min gap to trigger segment splitting!)
-    const walkBackStartTime = cafeStartTime + 20 * 60 * 1000; // 20 min gap!
-    for (let i = 0; i < 8; i++) {
-      const time = new Date(walkBackStartTime + i * 30 * 1000).toISOString();
-      const speed = 1.35;
-      curLat -= 0.0002;
-      curLon -= 0.0003;
-      dist += Math.round(speed * 30);
-
-      rows.push([
-        time,
-        trip2Id,
-        curLat.toFixed(6),
-        curLon.toFixed(6),
-        +speed.toFixed(2),
-        0.5,
-        225,
-        3.0,
-        920,
-        2.0,
-        7,
-        +battery.toFixed(2),
-        'unplugged',
-        'walking',
-        i === 7 ? 'Office_Corp_WLAN' : '',
-        'sample-device',
-        dist,
-        'walking',
-        '',
-      ].join(','));
-    }
-
-    // Trip 3: Evening Trip (e.g. 18:30 IST -> 13:00 UTC)
-    // Cycling or Running or Driving
-    const trip3Mode = dIdx % 3 === 0 ? 'running' : (dIdx % 3 === 1 ? 'cycling' : 'driving');
-    const trip3Id = `trip_${dateStr.replace(/-/g, '')}_evening`;
-    const trip3StartTime = new Date(`${dateStr}T13:00:00.000Z`).getTime();
-    curLat = 12.9650 + (dIdx * 0.001);
-    curLon = 77.6420 + (dIdx * 0.001);
-    dist = 0;
-    const speedBase = trip3Mode === 'running' ? 3.2 : (trip3Mode === 'cycling' ? 5.5 : 10.2);
-
-    for (let i = 0; i < 30; i++) {
-      const time = new Date(trip3StartTime + i * 40 * 1000).toISOString();
-      const speed = speedBase + Math.sin(i * 0.4) * (speedBase * 0.3);
-      // Create a nice loop or trajectory
-      curLat += Math.sin(i * 0.2) * 0.001;
-      curLon -= Math.cos(i * 0.15) * 0.0009;
-      dist += Math.round(speed * 40);
-      battery -= 0.0015;
-
-      const isParkStop = (trip3Mode === 'running' || trip3Mode === 'cycling') && (i >= 14 && i <= 17);
-      const ptSpeed = isParkStop ? 0.0 : +speed.toFixed(2);
-      const motion = isParkStop ? 'stationary' : (trip3Mode === 'running' ? 'running' : (trip3Mode === 'cycling' ? 'cycling' : 'automotive'));
-
-      rows.push([
-        time,
-        trip3Id,
-        curLat.toFixed(6),
-        curLon.toFixed(6),
-        ptSpeed,
-        0.8,
-        Math.round((i * 15) % 360),
-        4.0,
-        910 + Math.round(Math.cos(i) * 15),
-        2.5,
-        6 + (i % 5),
+        new Date(p.timeMs).toISOString(),
+        tripId,
+        p.lat.toFixed(6),
+        p.lon.toFixed(6),
+        +p.speed.toFixed(2),
+        opts.speedAcc,
+        p.stopped ? 0 : Math.round(p.course),
+        opts.courseAcc,
+        915 + Math.round(Math.sin(p.along / 800) * 10),
+        opts.vertAcc,
+        5 + Math.round(random() * 7),
         +Math.max(0.1, battery).toFixed(2),
-        'unplugged',
-        motion,
-        isParkStop ? 'CubbonPark_FreeWifi' : (i === 29 ? 'Home_Fiber_5G' : ''),
+        opts.batteryState ?? 'unplugged',
+        opts.motion,
+        opts.wifi,
         'sample-device',
-        dist,
-        trip3Mode,
-        i === 0 ? time : '',
+        Math.round(dist),
+        mode,
+        opts.start ? new Date(p.timeMs).toISOString() : '',
       ].join(','));
+    };
+
+    // Trip 1: Morning Commute home -> office (08:30 IST -> 03:00 UTC), driving or cycling,
+    // with a stop at a signal partway
+    const trip1Mode: Mode = dIdx % 2 === 0 ? 'driving' : 'cycling';
+    const trip1Id = `trip_${day}_morning`;
+    const trip1Key = `morning-${dIdx}`;
+    const trip1 = travel(routeLine(trip1Key), trip1Mode, new Date(`${dateStr}T03:00:00.000Z`).getTime(),
+      { along: routeStop(trip1Key, 0.45), count: 4, interval: 45 });
+    trip1.forEach((p, i) => {
+      battery -= 0.000025 * MODES[trip1Mode].dt;
+      pushRow(p, trip1Id, trip1Mode, p.along, {
+        speedAcc: 1.0, courseAcc: 5.0, vertAcc: 3.0,
+        motion: p.stopped ? 'stationary' : MODES[trip1Mode].motion,
+        wifi: i === 0 ? 'Home_Fiber_5G' : (p.stopped ? 'TrafficSignal_Mesh' : ''),
+        start: i === 0,
+      });
+    });
+
+    // Trip 2: Lunch walk from the office to a cafe, a stationary stop there, and the walk back
+    // after a deliberate gap (> 5 min, so the trip splits into two segments)
+    const trip2Id = `trip_${day}_lunch_walk`;
+    const walkLine = routeLine(`lunch-${dIdx}`);
+    const walkStyle = { speedAcc: 0.5, courseAcc: 3.0, vertAcc: 2.0, motion: 'walking' };
+    const walkOut = travel(walkLine, 'walking', new Date(`${dateStr}T06:30:00.000Z`).getTime());
+    walkOut.forEach((p, i) => {
+      battery -= 0.0001;
+      pushRow(p, trip2Id, 'walking', p.along, { ...walkStyle, wifi: '', start: i === 0 });
+    });
+
+    // Stationary stop at the cafe, charging
+    const cafe = walkOut[walkOut.length - 1];
+    const cafeStartTime = cafe.timeMs + 31 * 1000;
+    for (let i = 0; i < 5; i++) {
+      pushRow({ ...cafe, timeMs: cafeStartTime + i * 60 * 1000, speed: 0, stopped: true }, trip2Id, 'walking', cafe.along, {
+        speedAcc: 0.1, courseAcc: 0, vertAcc: 2.0, motion: 'stationary', wifi: 'ThirdWaveCoffee_Guest',
+        batteryState: 'charging', start: false,
+      });
     }
 
-    const csvContent = header + rows.join('\n') + '\n';
+    // Walk back the same way, 20 min after reaching the cafe
+    const walkBack = travel([...walkLine].reverse(), 'walking', cafeStartTime + 20 * 60 * 1000);
+    walkBack.forEach((p, i) => {
+      pushRow(p, trip2Id, 'walking', cafe.along + p.along, {
+        ...walkStyle, wifi: i === walkBack.length - 1 ? 'Office_Corp_WLAN' : '', start: false,
+      });
+    });
+
+    // Trip 3: Evening Trip (18:30 IST -> 13:00 UTC): a run from home, a ride home via Cubbon Park,
+    // or the drive home. Runs and rides stop for a break.
+    const trip3Mode: Mode = dIdx % 3 === 0 ? 'running' : (dIdx % 3 === 1 ? 'cycling' : 'driving');
+    const trip3Id = `trip_${day}_evening`;
+    const trip3Key = `evening-${dIdx}`;
+    const parkStop = trip3Mode !== 'driving' ? { along: routeStop(trip3Key, 0.5), count: 4, interval: 40 } : undefined;
+    const parkWifi = trip3Mode === 'cycling' ? 'CubbonPark_FreeWifi' : 'BBMP_Park_WiFi';
+    const trip3 = travel(routeLine(trip3Key), trip3Mode, new Date(`${dateStr}T13:00:00.000Z`).getTime(), parkStop);
+    trip3.forEach((p, i) => {
+      battery -= 0.0000375 * MODES[trip3Mode].dt;
+      pushRow(p, trip3Id, trip3Mode, p.along, {
+        speedAcc: 0.8, courseAcc: 4.0, vertAcc: 2.5,
+        motion: p.stopped ? 'stationary' : MODES[trip3Mode].motion,
+        wifi: p.stopped ? parkWifi : (i === trip3.length - 1 ? 'Home_Fiber_5G' : ''),
+        start: i === 0,
+      });
+    });
+
+    const csvContent = HEADER + rows.join('\n') + '\n';
     const filePath = path.join(dataDir, `trips_${dateStr}.csv`);
     fs.writeFileSync(filePath, csvContent, 'utf-8');
   }
