@@ -51,8 +51,8 @@ from plain daily CSV files: no cloud, no database, no API keys.
   distance, time, speed, trips and stops.
 - 🎯 **Accuracy filter**: hide jittery GPS points with a slider (10 to 100 m).
 - 🕰️ **IST throughout**: days run midnight to midnight IST, and every time is shown in IST.
-- 🔒 **Private map tiles**: the server fetches and caches OpenStreetMap / CARTO tiles, so tile
-  providers never see your browser.
+- 🔒 **Private map tiles**: the server fetches and caches OpenStreetMap tiles, so the tile
+  server never sees your browser.
 - 📲 **Works on a phone**: the sidebar folds away into a menu.
 - 🪶 **Light on the Pi**: one container and one Node process, ~60–100 MB of RAM, a ~120 MB image,
   and memory that doesn't grow with years of history.
@@ -83,7 +83,6 @@ Compose plugin, and Overland on your iPhone. The [guide](docs/GUIDE.md) covers t
 | Click a purple stop | How long you stayed, when, the WiFi network and battery level |
 | **Display** → **By Speed** | Routes coloured green → red by speed, with a legend |
 | **Display** → **Filter By Mode** | Only walking, only driving, … everywhere on the page |
-| Layers button on the map | OpenStreetMap, CartoDB Dark or Voyager (remembered) |
 | **↻** next to the title | Loads points uploaded since you opened the page |
 
 Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app).
@@ -99,7 +98,7 @@ flowchart LR
     B[🖥️ Browser] -- "basic auth" --> W[Express:<br/>auth · limits · CSP]
     W --> A
     W --> T[Tile proxy<br/>+ disk cache]
-    T -. cache miss .-> O[OSM / CARTO]
+    T -. cache miss .-> O[OSM]
 ```
 
 <details>
@@ -127,8 +126,8 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
    - Days are **IST days**, and files are named by IST date, so day D is read from file D alone.
      A trip crossing midnight is split between both days.
 5. **Web**: basic auth on everything except `/api/overland` and `/api/health`; serves the built
-   React app (precompressed `.br`/`.gz`, hashed assets cached `immutable`); proxies `/tiles/` to
-   OSM/CARTO with a disk cache (`tile-cache` volume, 1 GB cap); security headers, a strict CSP and
+   React app (precompressed `.br`/`.gz`, hashed assets cached `immutable`); proxies `/tiles/osm/` to
+   OpenStreetMap with a disk cache (`tile-cache` volume, 1 GB cap); security headers, a strict CSP and
    per-IP rate limits.
 6. **Browser** (React + Leaflet) loads the day list, then that day's trips and stops, and draws
    them in IST. It only ever talks to your server.
@@ -150,8 +149,8 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
 - **Overland** sends points only to the URL you configure: your server.
 - **The browser** loads the app, the API and map tiles from your server only. The production CSP
   allows `'self'` and nothing else, so no fonts, scripts or trackers load from elsewhere.
-- **Map tiles**: on a cache miss, the server fetches the tile from OpenStreetMap or CARTO with
-  only `User-Agent` and `Accept` headers. The provider sees your server's IP and which map tiles
+- **Map tiles**: on a cache miss, the server fetches the tile from OpenStreetMap with only
+  `User-Agent` and `Accept` headers. OpenStreetMap sees your server's IP and which map tiles
   were requested (which reveals the areas viewed), never your browser, cookies or location
   points. Cached tiles are reused for 30 days.
 - **Not stored anywhere else:** no database, no copies. Back up `DATA_DIR` to back up your
@@ -215,12 +214,15 @@ SEED_SAMPLE_DATA=true npm run dev   # API + Vite on 127.0.0.1:3000, sample data 
 npm run lint                        # tsc --noEmit
 npm test                            # vitest
 npm run build                       # frontend + bundled server into dist/
+npm run screenshots                 # rebuild, retake docs/images/*.jpg from sample data
 ```
 
 The dev server reads `./data` and fetches map tiles directly; production serves `dist/` and
 proxies tiles. `AUTH_USER`/`AUTH_HASH` in the shell turn the login on in dev too. Built with
 TypeScript, Express, React, Leaflet, Tailwind CSS and PapaParse. Screenshots in `docs/images/`
-are taken from sample data only, never real location history.
+are taken from sample data only, never real location history: `npm run screenshots` runs the
+production build on generated sample data in a temp dir with a throwaway login, and drives
+headless Chromium (`CHROMIUM=/path` to override).
 
 ## 🤝 Contributing
 

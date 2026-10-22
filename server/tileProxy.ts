@@ -3,10 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import express from 'express';
 
-// Only these tile URLs are fetched, so the proxy can't be pointed anywhere else
-const CARTO_RE = /^\/(dark_all|rastertiles\/voyager)\/(\d{1,2})\/(\d{1,7})\/(\d{1,7})(@2x)?\.png$/;
-const OSM_RE = /^\/(osm)\/(\d{1,2})\/(\d{1,7})\/(\d{1,7})\.png$/;
-const MAX_ZOOM = 20;
+// Only OpenStreetMap tile URLs are fetched, so the proxy can't be pointed anywhere else
+const OSM_RE = /^\/osm\/(\d{1,2})\/(\d{1,7})\/(\d{1,7})\.png$/;
+const MAX_ZOOM = 19;
 
 const USER_AGENT = 'somaari-trip/1.0 (self-hosted personal tile cache)';
 const UPSTREAM_TIMEOUT_MS = 10_000;
@@ -35,23 +34,17 @@ interface Fetched {
   body?: Buffer;
 }
 
-/** Maps /<style>/<z>/<x>/<y>[@2x].png to its upstream URL, or undefined if not allowed */
+/** Maps /osm/<z>/<x>/<y>.png to its upstream URL, or undefined if not allowed */
 export function parseTilePath(p: string): Tile | undefined {
-  const m = CARTO_RE.exec(p) ?? OSM_RE.exec(p);
+  const m = OSM_RE.exec(p);
   if (!m) return undefined;
-  const [, style, zs, xs, ys, retina = ''] = m;
+  const [, zs, xs, ys] = m;
   const z = Number(zs);
   const x = Number(xs);
   const y = Number(ys);
   if (z > MAX_ZOOM || x >= 2 ** z || y >= 2 ** z) return undefined;
-  const tilePath = `${z}/${x}/${y}${retina}.png`;
-  return {
-    key: `${style}/${tilePath}`,
-    url:
-      style === 'osm'
-        ? `https://tile.openstreetmap.org/${tilePath}`
-        : `https://a.basemaps.cartocdn.com/${style}/${tilePath}`,
-  };
+  const tilePath = `${z}/${x}/${y}.png`;
+  return { key: `osm/${tilePath}`, url: `https://tile.openstreetmap.org/${tilePath}` };
 }
 
 async function walk(
@@ -76,8 +69,8 @@ async function walk(
 }
 
 /**
- * GET /tiles/<style>/<z>/<x>/<y>.png: fetches allow-listed map tiles from CARTO/OSM and caches
- * them on disk, so tile servers only see this server (once per tile), never the browser.
+ * GET /tiles/osm/<z>/<x>/<y>.png: fetches OpenStreetMap tiles and caches them on disk, so the
+ * tile server only sees this server (once per tile), never the browser.
  * Nothing from the browser's request is forwarded upstream.
  */
 export function createTileProxy(opts: TileProxyOptions) {

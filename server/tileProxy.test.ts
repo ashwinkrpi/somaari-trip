@@ -41,11 +41,7 @@ async function start(opts: Omit<TileProxyOptions, 'cacheDir'>) {
 }
 
 describe('parseTilePath', () => {
-  it('maps allowed styles to their upstream', () => {
-    expect(parseTilePath('/dark_all/3/1/2.png')?.url).toBe('https://a.basemaps.cartocdn.com/dark_all/3/1/2.png');
-    expect(parseTilePath('/rastertiles/voyager/3/1/2@2x.png')?.url).toBe(
-      'https://a.basemaps.cartocdn.com/rastertiles/voyager/3/1/2@2x.png',
-    );
+  it('maps OSM tiles to their upstream', () => {
     expect(parseTilePath('/osm/3/1/2.png')).toEqual({ key: 'osm/3/1/2.png', url: 'https://tile.openstreetmap.org/3/1/2.png' });
   });
 
@@ -53,16 +49,21 @@ describe('parseTilePath', () => {
     for (const p of [
       '/light_all/3/1/2.png',
       '/osm/3/1/2@2x.png',
-      '/dark_all/3/1/2.jpg',
-      '/dark_all/3/-1/2.png',
-      '/dark_all/3/1.5/2.png',
-      '/dark_all/3/8/0.png', // x out of range at z=3
-      '/dark_all/21/0/0.png',
-      '/dark_all/../../etc/passwd',
-      '/dark_all/3/1/2.png?x=1',
+      '/osm/3/1/2.jpg',
+      '/osm/3/-1/2.png',
+      '/osm/3/1.5/2.png',
+      '/osm/3/8/0.png', // x out of range at z=3
+      '/osm/20/0/0.png',
+      '/osm/../../etc/passwd',
+      '/osm/3/1/2.png?x=1',
     ]) {
       expect(parseTilePath(p), p).toBeUndefined();
     }
+  });
+
+  it('rejects the removed dark and voyager styles', () => {
+    expect(parseTilePath('/dark_all/3/1/2.png')).toBeUndefined();
+    expect(parseTilePath('/rastertiles/voyager/3/1/2@2x.png')).toBeUndefined();
   });
 });
 
@@ -71,6 +72,7 @@ describe('tile proxy', () => {
     const { calls, fetchFn } = upstream();
     const get = await start({ fetch: fetchFn });
     expect((await get('/tiles/light_all/1/0/0.png')).status).toBe(404);
+    expect((await get('/tiles/dark_all/1/0/0.png')).status).toBe(404);
     expect((await get('/tiles/')).status).toBe(404);
     expect(calls).toHaveLength(0);
   });
@@ -79,20 +81,20 @@ describe('tile proxy', () => {
     const { calls, fetchFn } = upstream();
     const get = await start({ fetch: fetchFn });
 
-    const miss = await get('/tiles/dark_all/3/1/2@2x.png');
+    const miss = await get('/tiles/osm/3/1/2.png');
     expect(miss.status).toBe(200);
     expect(miss.headers.get('x-cache-status')).toBe('MISS');
     expect(miss.headers.get('content-type')).toBe('image/png');
     expect(miss.headers.get('cache-control')).toBe('private, max-age=604800');
     expect(Buffer.from(await miss.arrayBuffer())).toEqual(PNG);
-    expect(fs.readFileSync(path.join(tmp, 'dark_all/3/1/2@2x.png'))).toEqual(PNG);
+    expect(fs.readFileSync(path.join(tmp, 'osm/3/1/2.png'))).toEqual(PNG);
 
-    const hit = await get('/tiles/dark_all/3/1/2@2x.png');
+    const hit = await get('/tiles/osm/3/1/2.png');
     expect(hit.headers.get('x-cache-status')).toBe('HIT');
     expect(Buffer.from(await hit.arrayBuffer())).toEqual(PNG);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe('https://a.basemaps.cartocdn.com/dark_all/3/1/2@2x.png');
+    expect(calls[0].url).toBe('https://tile.openstreetmap.org/3/1/2.png');
     expect([...calls[0].headers.keys()].sort()).toEqual(['accept', 'user-agent']);
     expect(calls[0].headers.get('user-agent')).toMatch(/^somaari-trip\//);
   });

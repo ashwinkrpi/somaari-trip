@@ -5,7 +5,7 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 ## Layout
 - `server.ts`: env → `createApp`, Vite middleware in dev, server timeouts. Prod exits without `AUTH_USER`/`AUTH_HASH` (`npm run hash-password`)
 - `server/app.ts`: `createApp` with routes `/api/health`, `/api/days`, `/api/trips`, `/api/overland` (only if `OVERLAND_TOKEN` is set), `/api/seed` (only if `SEED_SAMPLE_DATA=true`), `/tiles/` (prod), security headers, rate limits, basic auth (all but health/overland), static `dist/`
-- `server/auth.ts` (scrypt basic auth), `server/rateLimit.ts` (per-IP token buckets), `server/staticFiles.ts` (precompressed `.br`/`.gz` from the Vite build, gzipped JSON), `server/tileProxy.ts` (allow-listed CARTO/OSM tile proxy with disk cache under `cache/tiles`, prod only)
+- `server/auth.ts` (scrypt basic auth), `server/rateLimit.ts` (per-IP token buckets), `server/staticFiles.ts` (precompressed `.br`/`.gz` from the Vite build, gzipped JSON), `server/tileProxy.ts` (OpenStreetMap-only tile proxy, `/tiles/osm/<z>/<x>/<y>.png`, with disk cache under `cache/tiles`, prod only)
 - `server/overlandIngest.ts`: Overland payload → IST-dated CSV rows (pure), and the per-file append queue
 - `server/tripParser.ts`: CSV parse, stop detection, trip/segment building, day summaries (pure functions)
 - `server/seedData.ts`: sample CSV generator (only when `SEED_SAMPLE_DATA=true`)
@@ -21,6 +21,7 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 - `npm run lint`: `tsc --noEmit` (with `noUnusedLocals`)
 - `npm test`: vitest
 - `npm run build`: vite build (with `.br`/`.gz`) + esbuild server → `dist/`
+- `npm run screenshots`: build, then `scripts/screenshots.mjs` retakes `docs/images/*.jpg` (production build on sample data in a temp dir, throwaway login, headless Chromium over DevTools, Self-Hosted badge hidden)
 - `npm run -s hash-password -- <user> >> .env`: append `AUTH_USER`/`AUTH_HASH`
 - `docker compose up -d --build`
 

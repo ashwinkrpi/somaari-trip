@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { TripFeature, StopFeature, TripSegment } from '../../shared/types.ts';
 import { formatToIST, formatDuration, formatDistance, getModeColor, getSpeedColor } from '../utils/time.ts';
 import { escapeHtml } from '../utils/html.ts';
-import { Layers, Navigation, Compass } from 'lucide-react';
+import { Navigation, Compass } from 'lucide-react';
 
 interface MapViewerProps {
   trips: TripFeature[];
@@ -18,55 +18,12 @@ function segmentLatLngs(seg: TripSegment): L.LatLngTuple[] {
   return seg.points.map(p => [p.lat, p.lon]);
 }
 
-// In production the server proxies and caches tiles under /tiles/ (server/tileProxy.ts) so the tile
-// servers never see the browser. The dev server has no proxy, so it fetches them directly.
-const CARTO_BASE = import.meta.env.DEV ? 'https://{s}.basemaps.cartocdn.com' : '/tiles';
-const OSM_BASE = import.meta.env.DEV ? 'https://tile.openstreetmap.org' : '/tiles/osm';
-
-// The first entry is the default
-const TILE_PROVIDERS = [
-  {
-    name: 'OpenStreetMap',
-    url: `${OSM_BASE}/{z}/{x}/{y}.png`,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  },
-  {
-    name: 'CartoDB Dark',
-    url: `${CARTO_BASE}/dark_all/{z}/{x}/{y}{r}.png`,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 20,
-  },
-  {
-    name: 'CartoDB Voyager',
-    url: `${CARTO_BASE}/rastertiles/voyager/{z}/{x}/{y}{r}.png`,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 20,
-  },
-];
-
-// The chosen style is remembered by name, so reordering TILE_PROVIDERS doesn't change it.
-// Storage can be unavailable (private mode, blocked site data), so failures fall back to the default.
-const TILE_STORAGE_KEY = 'mapStyle';
-
-function loadTileIndex(): number {
-  try {
-    const idx = TILE_PROVIDERS.findIndex(t => t.name === localStorage.getItem(TILE_STORAGE_KEY));
-    return idx >= 0 ? idx : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function saveTileIndex(idx: number) {
-  try {
-    localStorage.setItem(TILE_STORAGE_KEY, TILE_PROVIDERS[idx].name);
-  } catch {
-    // Not remembered; harmless
-  }
-}
+// In production the server proxies and caches tiles under /tiles/osm/ (server/tileProxy.ts) so the
+// tile server never sees the browser. The dev server has no proxy, so it fetches them directly.
+const OSM_TILE_URL = import.meta.env.DEV
+  ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+  : '/tiles/osm/{z}/{x}/{y}.png';
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 export const MapViewer: React.FC<MapViewerProps> = ({
   trips,
@@ -78,14 +35,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const polylinesGroupRef = useRef<L.FeatureGroup | null>(null);
   const stopsGroupRef = useRef<L.FeatureGroup | null>(null);
   const markersGroupRef = useRef<L.FeatureGroup | null>(null);
   const tripLinesRef = useRef<Map<string, L.Polyline[]>>(new Map());
-
-  const [activeTileIndex, setActiveTileIndex] = useState(loadTileIndex);
-  const [showTileMenu, setShowTileMenu] = useState(false);
 
   // Initialize Map
   useEffect(() => {
@@ -100,14 +53,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    const tileConfig = TILE_PROVIDERS[activeTileIndex];
-    const tileLayer = L.tileLayer(tileConfig.url, {
-      attribution: tileConfig.attribution,
-      subdomains: tileConfig.subdomains || 'abc',
-      maxZoom: tileConfig.maxZoom,
-    }).addTo(map);
-
-    tileLayerRef.current = tileLayer;
+    L.tileLayer(OSM_TILE_URL, { attribution: OSM_ATTRIBUTION, maxZoom: 19 }).addTo(map);
 
     const polylinesGroup = L.featureGroup().addTo(map);
     const stopsGroup = L.featureGroup().addTo(map);
@@ -123,22 +69,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       mapInstanceRef.current = null;
     };
   }, []);
-
-  // Update Tile Layer
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    if (tileLayerRef.current) {
-      mapInstanceRef.current.removeLayer(tileLayerRef.current);
-    }
-    const tileConfig = TILE_PROVIDERS[activeTileIndex];
-    const newTileLayer = L.tileLayer(tileConfig.url, {
-      attribution: tileConfig.attribution,
-      subdomains: tileConfig.subdomains || 'abc',
-      maxZoom: tileConfig.maxZoom,
-    }).addTo(mapInstanceRef.current);
-    tileLayerRef.current = newTileLayer;
-    newTileLayer.bringToBack();
-  }, [activeTileIndex]);
 
   // Render Polylines and Markers
   useEffect(() => {
@@ -429,42 +359,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       {/* Floating Map Controls */}
       <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2">
-        {/* Layer Switcher */}
-        <div className="relative">
-          <button
-            id="btn-tile-selector"
-            type="button"
-            onClick={() => setShowTileMenu(!showTileMenu)}
-            className="p-2.5 bg-neutral-900/90 hover:bg-neutral-800 text-neutral-200 hover:text-white rounded-lg border border-neutral-700/60 shadow-lg backdrop-blur-md transition-all flex items-center justify-center cursor-pointer"
-            title="Switch Map Tiles"
-          >
-            <Layers className="w-4 h-4" />
-          </button>
-
-          {showTileMenu && (
-            <div className="absolute right-0 top-12 w-44 bg-neutral-900 border border-neutral-700/80 rounded-lg shadow-xl py-1.5 z-50 backdrop-blur-md">
-              <div className="px-3 py-1 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Map Style</div>
-              {TILE_PROVIDERS.map((tile, idx) => (
-                <button
-                  key={tile.name}
-                  type="button"
-                  onClick={() => {
-                    setActiveTileIndex(idx);
-                    saveTileIndex(idx);
-                    setShowTileMenu(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
-                    activeTileIndex === idx ? 'bg-indigo-600/20 text-indigo-400 font-medium' : 'text-neutral-300 hover:bg-neutral-800'
-                  }`}
-                >
-                  <span>{tile.name}</span>
-                  {activeTileIndex === idx && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Recenter / Fit button */}
         <button
           id="btn-recenter-map"

@@ -12,7 +12,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "hash-password": "tsx scripts/hash-password.ts"
+    "hash-password": "tsx scripts/hash-password.ts",
+    "screenshots": "npm run build && node scripts/screenshots.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",

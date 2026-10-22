@@ -35,7 +35,7 @@ For how it works inside, privacy, security, the API and development, see the [RE
 - 🧭 [Using the app](#-using-the-app): [Signing in](#signing-in) · [The screen](#the-screen) ·
   [Picking a day](#picking-a-day) · [Several days at once](#several-days-at-once) ·
   [Trips](#trips) · [Reading the map](#reading-the-map) · [Stops](#stops) ·
-  [Display settings](#display-settings) · [Map style and controls](#map-style-and-controls) ·
+  [Display settings](#display-settings) · [Map controls](#map-controls) ·
   [On a phone](#on-a-phone) · [Times and days](#times-and-days)
 - 🩺 [Troubleshooting](#-troubleshooting)
 
@@ -324,17 +324,14 @@ reported one) and the battery level. Grouped stops list each stop in the group.
 | 🟣 **Show Stationary Stops** | Hides or shows the stop markers |
 | 🚲 **Filter By Mode** | Click a mode to show only trips of that mode; click more to add them. The stats bar, trip list and stops follow the filter. Click the selected modes again to unselect them; with none selected, everything is shown |
 
-### Map style and controls
+### Map controls
 
-<img src="images/map-style.jpg" alt="Map style menu" width="100%">
+The map is OpenStreetMap. On the right of the map:
+- **Arrow button** (Fit to Trips, top right): zoom back out to show every trip in the current
+  view.
+- **+ / −** (bottom right): zoom. You can also scroll, pinch, or drag the map.
 
-On the right of the map:
-- **Layers button**: choose the map style: **OpenStreetMap** (default), **CartoDB Dark** or
-  **CartoDB Voyager**. Your choice is remembered in this browser.
-- **Arrow button** (Fit to Trips): zoom back out to show every trip in the current view.
-- **+ / −**: zoom. You can also scroll, pinch, or drag the map.
-
-In Docker, map tiles go through your server and are cached there, so the map providers never see
+In Docker, map tiles go through your server and are cached there, so OpenStreetMap never sees
 your browser.
 
 ### On a phone
