@@ -39,4 +39,4 @@ Self-hosted GPS route viewer. Overland iOS → `POST /api/overland` → daily CS
 - The repo is meant to be public: test fixtures, screenshots and docs use synthetic data only (never a real CSV row, Overland payload or coordinate), and host-specific details (IPs, paths) stay in `.env` or `plans/`
 
 ## Work in progress
-Plans live in `plans/` (gitignored, local only; absent in a fresh clone). The repo is public (`origin`, history squashed); full private history is in remote `private`, never push `main` there. `INGEST_PLAN.md` is done except the phone cutover; `IMPROVEMENT_PLAN.md` and `REDESIGN_PLAN.md` are done except optional items. Work stage by stage, tick items off. Read only the files an item names.
+Plans live in `plans/` (gitignored, local only; absent in a fresh clone). The repo is public (`origin`, history squashed); full private history is in remote `private`, never push `main` there. `INGEST_PLAN.md` is done except the phone cutover; `BACKLOG.md` holds optional ideas. Work stage by stage, tick items off. Read only the files an item names.
