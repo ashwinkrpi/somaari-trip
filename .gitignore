@@ -10,3 +10,6 @@ data/
 .htpasswd
 cache/
 plans/
+
+# Dev-only notes for Claude Code (kept local)
+CLAUDE.md
