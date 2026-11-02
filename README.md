@@ -89,17 +89,7 @@ Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app)
 
 ## 🧠 How it works
 
-```mermaid
-flowchart LR
-    P[📱 Overland iOS] -- "POST /api/overland<br/>bearer token" --> I[Ingest]
-    I -- "append rows<br/>by IST day" --> C[(trips_YYYY-MM-DD.csv)]
-    C --> R[Parser:<br/>trips · segments · stops]
-    R --> A["/api/days<br/>/api/trips"]
-    B[🖥️ Browser] -- "basic auth" --> W[Express:<br/>auth · limits · CSP]
-    W --> A
-    W --> T[Tile proxy<br/>+ disk cache]
-    T -. cache miss .-> O[OSM]
-```
+<img src="docs/images/architecture.svg" alt="Overland iOS posts points to Ingest, which appends rows to daily CSV files; the Parser feeds the API. The browser goes through Express to the API and to a tile proxy that fetches from OpenStreetMap on a cache miss." width="640">
 
 <details>
 <summary><b>Step by step</b></summary>

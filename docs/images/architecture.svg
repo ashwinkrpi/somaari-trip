@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-labelledby="title desc">
+  <title id="title">How somaari-trip works</title>
+  <desc id="desc">Overland on the phone posts points to Ingest, which appends rows to daily CSV files. The Parser reads those files and feeds the API. The browser reaches Express, which serves the API and a tile proxy that fetches from OpenStreetMap on a cache miss.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#a3a3a3"/>
+    </marker>
+    <style>
+      text { font-family: "DejaVu Sans", "Segoe UI", Helvetica, Arial, sans-serif; text-anchor: middle; }
+      .box { fill: #262a30; stroke: #30353d; stroke-width: 2; }
+      .client { fill: #171717; stroke: #6366f1; stroke-width: 2; }
+      .store { fill: #171717; stroke: #10b981; stroke-width: 2; }
+      .name { fill: #ffffff; font-size: 19px; font-weight: 600; }
+      .sub { fill: #d4d4d4; font-size: 15px; }
+      .label { fill: #a3a3a3; font-size: 14px; text-anchor: start; }
+      .flow { fill: none; stroke: #a3a3a3; stroke-width: 2; marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <rect width="640" height="640" rx="16" fill="#171717"/>
+
+  <!-- Flows -->
+  <path class="flow" d="M50 76 V138"/>
+  <path class="flow" d="M455 76 V138"/>
+  <path class="flow" d="M50 204 V262"/>
+  <path class="flow" d="M165 324 V358"/>
+  <path class="flow" d="M300 392 H338"/>
+  <path class="flow" d="M455 204 V358"/>
+  <path class="flow" d="M590 204 V458"/>
+  <path class="flow dashed" d="M475 524 V574"/>
+
+  <!-- Flow labels -->
+  <text class="label" x="62" y="102">POST /api/overland</text>
+  <text class="label" x="62" y="122">bearer token</text>
+  <text class="label" x="467" y="112">basic auth</text>
+  <text class="label" x="62" y="230">append rows</text>
+  <text class="label" x="62" y="250">by IST day</text>
+  <text class="label" x="487" y="554">on cache miss</text>
+
+  <!-- Left column: the data path -->
+  <rect class="client" x="30" y="20" width="270" height="56" rx="10"/>
+  <text class="name" x="165" y="55">Overland iOS</text>
+
+  <rect class="box" x="30" y="140" width="270" height="64" rx="10"/>
+  <text class="name" x="165" y="179">Ingest</text>
+
+  <rect class="store" x="30" y="264" width="270" height="60" rx="10"/>
+  <text class="name" x="165" y="289">CSV files</text>
+  <text class="sub" x="165" y="311">trips_YYYY-MM-DD.csv</text>
+
+  <rect class="box" x="30" y="360" width="270" height="64" rx="10"/>
+  <text class="name" x="165" y="385">Parser</text>
+  <text class="sub" x="165" y="408">trips · segments · stops</text>
+
+  <!-- Right column: the viewing path -->
+  <rect class="client" x="340" y="20" width="270" height="56" rx="10"/>
+  <text class="name" x="475" y="55">Browser</text>
+
+  <rect class="box" x="340" y="140" width="270" height="64" rx="10"/>
+  <text class="name" x="475" y="165">Express</text>
+  <text class="sub" x="475" y="188">auth · limits · CSP</text>
+
+  <rect class="box" x="340" y="360" width="230" height="64" rx="10"/>
+  <text class="name" x="455" y="385">API</text>
+  <text class="sub" x="455" y="408">/api/days · /api/trips</text>
+
+  <rect class="box" x="340" y="460" width="270" height="64" rx="10"/>
+  <text class="name" x="475" y="485">Tile proxy</text>
+  <text class="sub" x="475" y="508">+ disk cache</text>
+
+  <rect class="client" x="340" y="576" width="270" height="48" rx="10"/>
+  <text class="name" x="475" y="607">OpenStreetMap</text>
+</svg>
