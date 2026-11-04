@@ -7,7 +7,8 @@ const PORT = Number(process.env.PORT) || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 // Prod runs in a container; dev should not be reachable from the LAN
 const HOST = IS_PROD ? '0.0.0.0' : '127.0.0.1';
-const DATA_DIR = path.join(process.cwd(), 'data');
+// Dev gets its own folder: ./data may hold real location history, and dev has no login by default
+const DATA_DIR = path.join(process.cwd(), IS_PROD ? 'data' : 'data-dev');
 
 const { AUTH_USER, AUTH_HASH } = process.env;
 let auth: { user: string; hash: string } | undefined;

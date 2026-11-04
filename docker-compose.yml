@@ -26,7 +26,8 @@ services:
       # Set SOMAARI_TRIP_BIND to your LAN, Tailscale or ZeroTier IP to reach it from other devices.
       - "${SOMAARI_TRIP_BIND:-127.0.0.1}:${SOMAARI_TRIP_PORT:-18473}:3000"
     volumes:
-      # Daily CSV trip directory. Set DATA_DIR in .env (default ./data)
+      # Daily CSV trip directory, ./data unless DATA_DIR is set in .env. Holds real location
+      # history: gitignored and dockerignored
       - ${DATA_DIR:-./data}:/app/data
       # Map tile cache, kept across rebuilds
       - tile-cache:/app/cache/tiles

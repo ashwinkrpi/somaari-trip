@@ -40,5 +40,11 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    server: {
+      fs: {
+        // Vite's defaults, plus ./data: the dev server would otherwise serve real CSVs to anyone
+        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', path.resolve(__dirname, 'data/**')],
+      },
+    },
   };
 });

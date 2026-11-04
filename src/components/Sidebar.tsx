@@ -269,7 +269,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
               {days.length === 0 ? (
                 <div className="p-4 rounded-lg bg-neutral-900/50 border border-neutral-800 text-center text-xs text-neutral-400">
-                  <p>No CSV files found in <code className="text-indigo-400">./data/</code></p>
+                  <p>No CSV files found in the data folder</p>
                 </div>
               ) : (
                 days.map(d => {

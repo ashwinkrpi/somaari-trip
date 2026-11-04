@@ -62,8 +62,9 @@ For how it works inside, privacy, security, the API and development, see the [RE
 git clone https://github.com/ashwinkrpi/somaari-trip.git
 cd somaari-trip
 
-# 2. Where the daily CSV files live (default ./data)
-echo "DATA_DIR=/path/to/gps-logs" >> .env
+# 2. Create the data folder for the daily CSV files. If it's missing, Docker creates it as root
+#    and uploads fail
+mkdir -p data
 
 # 3. Login (required: the app won't start without it). Prompts for the password
 npm ci
@@ -84,7 +85,7 @@ that your device can reach: its LAN IP at home, its ZeroTier/Tailscale IP from a
 container restarts by itself after crashes and reboots.
 
 > [!NOTE]
-> If `DATA_DIR` isn't owned by uid 1001, also set `INGEST_UID` / `INGEST_GID` to its owner (see
+> If `./data` isn't owned by uid 1001, also set `INGEST_UID` / `INGEST_GID` to its owner (see
 > [Data files](#data-files)).
 
 ### Who can reach it
@@ -144,8 +145,9 @@ npm ci
 SEED_SAMPLE_DATA=true npm run dev
 ```
 
-Open `http://localhost:3000`. It writes six sample days to `./data` if that folder is empty, needs
-no login, and only listens on the machine itself.
+Open `http://localhost:3000`. It writes six sample days to `./data-dev` if that folder has no trip
+files, needs no login, and only listens on the machine itself. The development server never reads
+`./data`, so your real trips aren't shown or changed.
 
 ---
 
@@ -159,10 +161,10 @@ Docker Compose reads these from `.env` next to `docker-compose.yml` (see `.env.e
 |---|---|---|
 | `AUTH_USER`, `AUTH_HASH` | none (required) | Login for the web app. Create with `npm run hash-password`, see [Login](#login) |
 | `OVERLAND_TOKEN` | none (required) | Shared secret the phone sends with uploads. `openssl rand -hex 32` |
-| `DATA_DIR` | `./data` | Folder on the server with the daily CSV files. Mounted read-write: uploads are appended here |
+| `DATA_DIR` | `./data` | Folder on the server with the daily CSV files. Mounted read-write: uploads are appended here. Leave it unset unless the files need to live outside the project folder |
 | `SOMAARI_TRIP_BIND` | `127.0.0.1` | Address to listen on, see [Who can reach it](#who-can-reach-it) |
 | `SOMAARI_TRIP_PORT` | `18473` | Port on the server |
-| `INGEST_UID`, `INGEST_GID` | `1001` | User and group the app runs as. Set to the owner of `DATA_DIR` so new files keep the same owner |
+| `INGEST_UID`, `INGEST_GID` | `1001` | User and group the app runs as. Set to the owner of the data folder so new files keep the same owner |
 
 > [!IMPORTANT]
 > After changing any of them run `docker compose up -d`. `docker compose restart` doesn't pick
@@ -197,15 +199,16 @@ retries later.
 
 > [!TIP]
 > **Check it works:** after a short trip, today's file `trips_YYYY-MM-DD.csv` should appear or
-> grow in `DATA_DIR`, and pressing **↻** in the app shows the trip. `docker logs somaari-trip`
+> grow in `./data`, and pressing **↻** in the app shows the trip. `docker logs somaari-trip`
 > shows errors, if any.
 
 ### Data files
 
-Each day is one CSV file in `DATA_DIR`, named `trips_YYYY-MM-DD.csv` by its **IST** date. The app
+Each day is one CSV file in `./data`, named `trips_YYYY-MM-DD.csv` by its **IST** date. The app
 creates and appends to them; you can also copy in files from elsewhere, as long as they use the
-same name pattern and columns. The files must be writable by `INGEST_UID`/`INGEST_GID` (default
-1001); check the owner with `ls -ln "$DATA_DIR"`.
+same name pattern and columns. Files with other names are ignored. The files must be writable by
+`INGEST_UID`/`INGEST_GID` (default 1001); check the owner with `ls -ln data`. Git and Docker builds
+both ignore the folder, so your location history stays out of the repo and the image.
 
 > [!TIP]
 > There's no database: back up the folder to back up your history, and encrypt it at rest
@@ -402,8 +405,9 @@ Then look at `docker logs somaari-trip`.
 <details>
 <summary><b>Uploads fail and the logs show <code>Error in /api/overland</code> with <code>EACCES</code></b></summary>
 
-The container user can't write to `DATA_DIR`; set `INGEST_UID`/`INGEST_GID` to the folder's owner
-([Data files](#data-files)).
+The container user can't write to `./data`. Docker creates a missing folder as root, so check the
+owner with `ls -ldn data`, then either change it to match `INGEST_UID`/`INGEST_GID` or set those
+to the folder's owner ([Data files](#data-files)).
 </details>
 
 **In the app**
@@ -411,7 +415,7 @@ The container user can't write to `DATA_DIR`; set `INGEST_UID`/`INGEST_GID` to t
 <details>
 <summary><b>"No CSV files found"</b></summary>
 
-There's no data yet. Check `DATA_DIR` and that Overland is uploading.
+There's no data yet. Check `./data` and that Overland is uploading.
 </details>
 
 <details>

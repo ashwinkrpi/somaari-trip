@@ -4,7 +4,7 @@ import { SAMPLE_ROUTES } from './sampleRoutes.ts';
 
 export function ensureSampleData(dataDir: string) {
   if (process.env.SEED_SAMPLE_DATA !== 'true') {
-    return; // No-op by default to prevent EROFS on read-only mount
+    return; // No-op by default: the data dir may hold real trips
   }
 
   if (!fs.existsSync(dataDir)) {
@@ -16,7 +16,7 @@ export function ensureSampleData(dataDir: string) {
     return; // Already has data
   }
 
-  console.log('Generating realistic sample Overland GPS trip data in ./data/...');
+  console.log(`Generating realistic sample Overland GPS trip data in ${dataDir}...`);
   generateSampleDays(dataDir);
 }
 
