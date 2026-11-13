@@ -47,8 +47,8 @@ from plain daily CSV files: no cloud, no database, no API keys.
   segments, stops detected where you stayed put, with WiFi network and battery level.
 - 🎨 **Colour by mode or speed**: walking, cycling, driving and more, or a green → red speed
   gradient. Grey where the phone didn't report a speed.
-- 📅 **Days and ranges**: one day, a custom range, or the past 3 / 7 / all days, with totals for
-  distance, time, speed, trips and stops.
+- 📅 **Days and ranges**: one day, a custom range, the last 3 or 7 days with data, or all of them,
+  with totals for distance, time, speed, trips and stops.
 - 🎯 **Accuracy filter**: hide jittery GPS points with a slider (10 to 100 m).
 - 🕰️ **IST throughout**: days run midnight to midnight IST, and every time is shown in IST.
 - 🔒 **Private map tiles**: the server fetches and caches OpenStreetMap tiles, so the tile
@@ -111,8 +111,10 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
      treats `speed=-1` as unknown rather than stopped. Day summaries are cached per file until it
      changes, and parsed points sit in a capped LRU (~100k points), so memory doesn't grow with
      history.
-   - Groups points by `trip_id`, splits trips on gaps over 5 minutes, detects stops (3+
-     consecutive stationary points), and computes distance, duration and speeds.
+   - Groups points by `trip_id`, splits trips on gaps over 5 minutes, and computes distance
+     (from Overland's `trip_distance_m`, or point to point when that's missing), duration and
+     speeds. Stops are 3+ consecutive stationary points of one trip with no gap over 15 minutes;
+     a point is stationary when `motion` says so, or its speed is 0 with accuracy within 30 m.
    - Days are **IST days**, and files are named by IST date, so day D is read from file D alone.
      A trip crossing midnight is split between both days.
 5. **Web**: basic auth on everything except `/api/overland` and `/api/health`; serves the built
@@ -188,13 +190,15 @@ There's no reverse proxy in front: Express does the login, limits and headers it
 | Endpoint | Returns |
 |---|---|
 | `GET /api/days` | Every day with data: date, points, distance, duration, trips, modes, stops |
-| `GET /api/trips?date=YYYY-MM-DD` | That day's trips (GeoJSON lines, split at gaps over 5 min) and stops |
-| `GET /api/trips?from=…&to=…` | The same for a range of days |
+| `GET /api/trips?date=YYYY-MM-DD` | That day's trips (GeoJSON lines, split at gaps over 5 min), stops and a summary. With no date, the latest day |
+| `GET /api/trips?from=…&to=…` | The same for a range of days (either end may be left out) |
 | `…&max_accuracy=50` | Drops points less accurate than this many metres (default 50) |
 | `GET /api/health` | `{"status":"ok", …}`, no login needed |
-| `POST /api/overland` | Overland batch upload (bearer token, not the login). 401 bad token, 400 no `locations` array, `{"result":"ok"}` once on disk |
+| `POST /api/overland` | Overland batch upload (bearer token, not the login). 401 bad token, 400 no `locations` array, `{"result":"ok"}` once on disk, 500 if the write failed |
+| `POST /api/seed` | Rewrites the sample days. Only exists when `SEED_SAMPLE_DATA=true` (dev) |
 
-All but `/api/health` and `/api/overland` need the login. CSV columns:
+All but `/api/health` and `/api/overland` need the login. Dates that aren't `YYYY-MM-DD` get a
+400, too many requests a 429 with `Retry-After`. CSV columns:
 [Data files](docs/GUIDE.md#data-files).
 
 ## 🛠️ Development

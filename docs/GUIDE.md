@@ -226,15 +226,15 @@ timestamp,trip_id,lat,lon,speed_mps,speed_accuracy,course,course_accuracy,altitu
 | Column | Meaning |
 |---|---|
 | `timestamp` | ISO 8601 UTC, e.g. `2026-08-30T03:30:00.000Z`. Shown in IST |
-| `trip_id` | Groups points into one trip |
+| `trip_id` | Groups points into one trip. Points without one form a single trip |
 | `lat`, `lon` | Position in degrees |
-| `speed_mps` | Speed in metres per second; `-1` means unknown |
+| `speed_mps` | Speed in metres per second; `-1` means unknown. `0` with good accuracy counts as stationary |
 | `accuracy_m` | Horizontal accuracy in metres. Points worse than the app's accuracy filter (default 50 m) are hidden |
 | `battery_level` | 0 to 1, shown in stop popups |
 | `wifi_ssid` | Network the phone was on, shown in stop popups |
-| `motion` | Activity, e.g. `stationary`, `walking`, `cycling`, `automotive`, `running` (several joined with `;`) |
-| `trip_distance_m` | Distance so far in the trip, in metres |
-| `trip_mode` | e.g. `walking`, `driving`, `cycling`, `running`, `train` |
+| `motion` | Activity, e.g. `stationary`, `walking`, `cycling`, `automotive`, `running` (several joined with `;`). `stationary` marks [stops](#stops) |
+| `trip_distance_m` | Distance so far in the trip, in metres. A trip's distance is the change in this; when it's always empty or 0, the distance is measured point to point |
+| `trip_mode` | e.g. `walking`, `driving`, `cycling`, `running`, `train`. A trip takes the mode most of its points have; empty means `unknown` |
 | the rest | `speed_accuracy`, `course`, `course_accuracy`, `altitude_m`, `vertical_accuracy`, `battery_state`, `device_id`, `trip_start`: stored as Overland sends them |
 
 Commas and line breaks inside values are replaced (`;` and a space), so files never need quoting.
@@ -256,7 +256,7 @@ rate limited; wait a few seconds and try again.
 
 | Part | What's there |
 |---|---|
-| **Sidebar** (left) | Three tabs, **Dates**, **Trips** and **Display**, and the colour legend for trip modes at the bottom |
+| **Sidebar** (left) | Three tabs, **Dates**, **Trips** and **Display**, and the colour legend for the main trip modes (walking, driving, cycling, running) at the bottom. Train and motorcycle trips have their own colours; any other mode is grey |
 | **Stats bar** (top) | What you're looking at (a day or a range), then total distance, total trip time, average and maximum speed, number of trips and number of stops |
 | **Map** | Routes, start and end points, stops, and the map controls on the right |
 
@@ -277,9 +277,10 @@ Click a day to show it on the map. The map zooms to fit that day's routes.
 <img src="images/date-range.jpg" alt="Date range: six days on the map at once" width="100%">
 
 Switch to **Date Range** at the top of the Dates tab, then either:
-- use a preset: **All Days**, **Past 3 Days** or **Past 7 Days** (shown when there are enough
-  days), or
-- click a first day, then a last day. The days in between are included.
+- use a preset: **All Days**, **Past 3 Days** or **Past 7 Days**. These count days that have
+  data, not calendar days, and show up once there are that many, or
+- click a first day, then a last day (in either order). The days in between are included. The
+  first click alone shows just that day; a third click starts a new range.
 
 **Clear** removes the range. Switch back to **Single Day** for one day again. The stats bar and
 the trip list cover the whole range.
@@ -306,15 +307,17 @@ distance, duration and average speed.
 | Coloured line | A route, coloured by trip mode (see the legend) or by speed (see [Display settings](#display-settings)) |
 | 🟢 Green dot | Where a trip starts. Hover for the time |
 | 🔴 Red dot | Where a trip ends. Hover for the time |
-| 🟣 Purple ring | A stop. A purple circle with a number is several stops close together |
+| 🟣 Purple ring | A stop. A purple circle with a number is several stops within about 150 m of each other |
 
 ### Stops
 
 <img src="images/stop-popup.jpg" alt="Stop popup with duration, times, WiFi and battery" width="100%">
 
-A stop is where the phone reported being stationary for at least 3 points in a row. Click one to
-see how long you were there, from and to when, the WiFi network the phone was on (if Overland
-reported one) and the battery level. Grouped stops list each stop in the group.
+A stop is at least 3 stationary points in a row within one trip, with no gap over 15 minutes
+between them. A point counts as stationary when Overland's motion says so, or when its speed is 0
+and it's accurate to 30 m or better. Click one to see how long you were there, from and to when,
+the WiFi network the phone was on (if Overland reported one), the battery level and how many
+points it's made of. Grouped stops list each stop in the group.
 
 ### Display settings
 
@@ -322,8 +325,8 @@ reported one) and the battery level. Grouped stops list each stop in the group.
 
 | Setting | What it does |
 |---|---|
-| 🎨 **Polyline Color Mode** | **By Trip Mode**: one colour per trip, from its mode. **By Speed (km/h)**: each stretch coloured from green (walking pace) through yellow to red (fast), with a legend at the bottom of the map. **Grey** means the phone didn't report a speed there. Hover over a stretch for its average speed and time |
-| 🎯 **Max Accuracy Filter** | 10 to 100 m, default 50: drops GPS points less accurate than this. Lower it if routes zig-zag or jump around (indoors, between tall buildings); raise it if parts of a route are missing. Resets to 50 m on reload |
+| 🎨 **Polyline Color Mode** | **By Trip Mode**: one colour per trip, from its mode. **By Speed (km/h)**: each stretch coloured green (up to 5 km/h), lime (20), yellow (45), orange (75) or red (faster), with a legend at the bottom left of the map. **Grey** means the phone didn't report a speed there. Hover over a stretch for its average speed and time |
+| 🎯 **Max Accuracy Filter** | 10 to 100 m in steps of 5, default 50: drops GPS points less accurate than this. Lower it if routes zig-zag or jump around (indoors, between tall buildings); raise it if parts of a route are missing. Resets to 50 m on reload |
 | 🟣 **Show Stationary Stops** | Hides or shows the stop markers |
 | 🚲 **Filter By Mode** | Click a mode to show only trips of that mode; click more to add them. The stats bar, trip list and stops follow the filter. Click the selected modes again to unselect them; with none selected, everything is shown |
 
