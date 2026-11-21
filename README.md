@@ -1,93 +1,36 @@
-<div align="center">
+<p align="center">
+  <img src="docs/images/banner.svg" alt="somaari-trip" width="100%">
+</p>
 
-<img src="docs/images/banner.svg" alt="somaari-trip — a self-hosted GPS route viewer for Overland iOS" width="100%">
+<p align="center">
+  A self-hosted GPS route viewer for Overland on iOS: see where you've been, on a map that only you can open.
+</p>
 
-<br>
+<p align="center">
+  <a href="docs/GUIDE.md">Guide</a> | <a href="https://docs.somaari.in/somaari-trip/">Docs</a> | <a href="https://somaari.in/">Website</a> | <a href="https://overland.p3k.app/">Overland</a> | <a href="https://github.com/ashwinkrpi/somaari-trip/issues">Issues</a>
+</p>
 
-**See where you've been, on a map that only you can open.**<br>
-Overland on your iPhone uploads straight to your own server. Routes, stops and stats are drawn
-from plain daily CSV files: no cloud, no database, no API keys.
+<p align="center">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/ashwinkrpi/somaari-trip?style=for-the-badge"></a>
+</p>
 
-<br>
 
-[![Node.js](https://img.shields.io/badge/node-22-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white)](https://leafletjs.com/)
-[![Docker](https://img.shields.io/badge/Docker-one%20container-2496ED?logo=docker&logoColor=white)](#-install)
-[![Raspberry Pi 5](https://img.shields.io/badge/Raspberry%20Pi-5-C51A4A?logo=raspberrypi&logoColor=white)](https://www.raspberrypi.com/products/raspberry-pi-5/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-61afef)](LICENSE)
+## Introduction
 
-[Features](#-features) ·
-[Install](#-install) ·
-[Usage](#-usage) ·
-[How it works](#-how-it-works) ·
-[Privacy](#-privacy) ·
-[Security](#%EF%B8%8F-security-model) ·
-[API](#-api) ·
-[Development](#%EF%B8%8F-development) ·
-[Guide](docs/GUIDE.md)
-
-</div>
-
-<img src="docs/images/overview.jpg" alt="Day list, trip stats and routes on the map (sample data)" width="100%">
+Overland on your iPhone uploads straight to your own server. Routes, stops and stats are drawn from plain daily CSV files: no cloud, no database, no API keys.
 
 > [!WARNING]
 > This is your precise location history. Keep the app on your home network or a private network
 > (ZeroTier, Tailscale, WireGuard) and **never port-forward it to the internet.**
 > See [Who can reach it](docs/GUIDE.md#who-can-reach-it).
 
----
+## See it work
 
-## ✨ Features
+<p align="center">
+  <img src="docs/images/overview.jpg" alt="Day list, trip stats and routes on the map (sample data)" width="90%">
+</p>
 
-- 📱 **Straight from Overland**: the iPhone app posts batches to your server with a token. Points
-  are written to disk before Overland is told "ok", so nothing is lost if anything fails.
-- 🗺️ **Trips and stops**: routes split into trips, gaps over 5 minutes shown as separate
-  segments, stops detected where you stayed put, with WiFi network and battery level.
-- 🎨 **Colour by mode or speed**: walking, cycling, driving and more, or a green → red speed
-  gradient. Grey where the phone didn't report a speed.
-- 📅 **Days and ranges**: one day, a custom range, the last 3 or 7 days with data, or all of them,
-  with totals for distance, time, speed, trips and stops.
-- 🎯 **Accuracy filter**: hide jittery GPS points with a slider (10 to 100 m).
-- 🕰️ **IST throughout**: days run midnight to midnight IST, and every time is shown in IST.
-- 🔒 **Private map tiles**: the server fetches and caches OpenStreetMap tiles, so the tile
-  server never sees your browser.
-- 📲 **Works on a phone**: the sidebar folds away into a menu.
-- 🪶 **Light on the Pi**: one container and one Node process, ~60–100 MB of RAM, a ~120 MB image,
-  and memory that doesn't grow with years of history.
-
-> [!NOTE]
-> No accounts, no API keys, no third-party services. The only things outside your network are
-> the map tile servers, and only your server talks to them.
-
-## 🚀 Install
-
-You need a Linux machine that stays on (Raspberry Pi 5 or any x86_64 server), Docker with the
-Compose plugin, and Overland on your iPhone. The [guide](docs/GUIDE.md) covers the rest:
-- [Install with Docker](docs/GUIDE.md#install-with-docker) and
-  [who can reach it](docs/GUIDE.md#who-can-reach-it) (LAN, ZeroTier/Tailscale, reboots)
-- [Settings](docs/GUIDE.md#settings): every `.env` option and its default
-- [Login](docs/GUIDE.md#login): creating and changing the password
-- [Overland (iPhone)](docs/GUIDE.md#overland-iphone): app settings and checking uploads arrive
-- [Data files](docs/GUIDE.md#data-files): CSV format, ownership, backups
-- [Updating](docs/GUIDE.md#updating) and [trying it with sample data](docs/GUIDE.md#try-it-with-sample-data)
-
-## 🧑‍💻 Usage
-
-| Do this… | What happens |
-|---|---|
-| Click a day in **Dates** | Its routes, stops and totals load, and the map zooms to fit |
-| **Date Range** → **Past 7 Days** | Every trip in the range on one map, with combined totals |
-| Click a trip in **Trips** | It's highlighted and zoomed to; the stats bar shows its mode |
-| Click a purple stop | How long you stayed, when, the WiFi network and battery level |
-| **Display** → **By Speed** | Routes coloured green → red by speed, with a legend |
-| **Display** → **Filter By Mode** | Only walking, only driving, … everywhere on the page |
-| **↻** next to the title | Loads points uploaded since you opened the page |
-
-Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app).
-
-## 🧠 How it works
+## How it works
 
 <img src="docs/images/architecture.svg" alt="Overland iOS posts points to Ingest, which appends rows to daily CSV files; the Parser feeds the API. The browser goes through Express to the API and to a tile proxy that fetches from OpenStreetMap on a cache miss." width="640">
 
@@ -126,7 +69,55 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
 
 </details>
 
-## 🔒 Privacy
+## Features
+
+- 📱 **Straight from Overland**: the iPhone app posts batches to your server with a token. Points
+  are written to disk before Overland is told "ok", so nothing is lost if anything fails.
+- 🗺️ **Trips and stops**: routes split into trips, gaps over 5 minutes shown as separate
+  segments, stops detected where you stayed put, with WiFi network and battery level.
+- 🎨 **Colour by mode or speed**: walking, cycling, driving and more, or a green → red speed
+  gradient. Grey where the phone didn't report a speed.
+- 📅 **Days and ranges**: one day, a custom range, the last 3 or 7 days with data, or all of them,
+  with totals for distance, time, speed, trips and stops.
+- 🎯 **Accuracy filter**: hide jittery GPS points with a slider (10 to 100 m).
+- 🕰️ **IST throughout**: days run midnight to midnight IST, and every time is shown in IST.
+- 🔒 **Private map tiles**: the server fetches and caches OpenStreetMap tiles, so the tile
+  server never sees your browser.
+- 📲 **Works on a phone**: the sidebar folds away into a menu.
+- 🪶 **Light on the Pi**: one container and one Node process, ~60–100 MB of RAM, a ~120 MB image,
+  and memory that doesn't grow with years of history.
+
+> [!NOTE]
+> No accounts, no API keys, no third-party services. The only things outside your network are
+> the map tile servers, and only your server talks to them.
+
+## Install
+
+You need a Linux machine that stays on (Raspberry Pi 5 or any x86_64 server), Docker with the
+Compose plugin, and Overland on your iPhone. The [guide](docs/GUIDE.md) covers the rest:
+- [Install with Docker](docs/GUIDE.md#install-with-docker) and
+  [who can reach it](docs/GUIDE.md#who-can-reach-it) (LAN, ZeroTier/Tailscale, reboots)
+- [Settings](docs/GUIDE.md#settings): every `.env` option and its default
+- [Login](docs/GUIDE.md#login): creating and changing the password
+- [Overland (iPhone)](docs/GUIDE.md#overland-iphone): app settings and checking uploads arrive
+- [Data files](docs/GUIDE.md#data-files): CSV format, ownership, backups
+- [Updating](docs/GUIDE.md#updating) and [trying it with sample data](docs/GUIDE.md#try-it-with-sample-data)
+
+## Usage
+
+| Do this… | What happens |
+|---|---|
+| Click a day in **Dates** | Its routes, stops and totals load, and the map zooms to fit |
+| **Date Range** → **Past 7 Days** | Every trip in the range on one map, with combined totals |
+| Click a trip in **Trips** | It's highlighted and zoomed to; the stats bar shows its mode |
+| Click a purple stop | How long you stayed, when, the WiFi network and battery level |
+| **Display** → **By Speed** | Routes coloured green → red by speed, with a legend |
+| **Display** → **Filter By Mode** | Only walking, only driving, … everywhere on the page |
+| **↻** next to the title | Loads points uploaded since you opened the page |
+
+Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app).
+
+## Privacy
 
 > [!IMPORTANT]
 > **TL;DR:** your location history stays on your server, in files you own. The phone uploads
@@ -152,14 +143,14 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
 
 </details>
 
-## 🛡️ Security model
+## Security model
 
 | Layer | Protection |
 |---|---|
-| 🔑 **Login** | Basic auth (scrypt hash in `.env`) on every route that reads data. The app won't start in production without it |
-| 📮 **Overland** | Its own bearer token, compared in constant time, 5 MB body limit |
-| 🚦 **Limits** | Per-IP rate limits and server timeouts; wrong passwords are limited before scrypt runs |
-| 🧱 **Container** | Non-root user, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
+| **Login** | Basic auth (scrypt hash in `.env`) on every route that reads data. The app won't start in production without it |
+| **Overland** | Its own bearer token, compared in constant time, 5 MB body limit |
+| **Limits** | Per-IP rate limits and server timeouts; wrong passwords are limited before scrypt runs |
+| **Container** | Non-root user, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
 
 <details>
 <summary><b>Details</b></summary>
@@ -185,7 +176,7 @@ There's no reverse proxy in front: Express does the login, limits and headers it
 
 </details>
 
-## 🔌 API
+## API
 
 | Endpoint | Returns |
 |---|---|
@@ -201,7 +192,7 @@ All but `/api/health` and `/api/overland` need the login. Dates that aren't `YYY
 400, too many requests a 429 with `Retry-After`. CSV columns:
 [Data files](docs/GUIDE.md#data-files).
 
-## 🛠️ Development
+## Development
 
 ```sh
 npm ci
@@ -220,7 +211,7 @@ are taken from sample data only, never real location history: `npm run screensho
 production build on generated sample data in a temp dir with a throwaway login, and drives
 headless Chromium (`CHROMIUM=/path` to override).
 
-## 🤝 Contributing
+## Contributing
 
 This is a personal project and doesn't accept pull requests. You're welcome to fork it and adapt
 it for yourself, and bug reports in [Issues](https://github.com/ashwinkrpi/somaari-trip/issues)
@@ -229,8 +220,3 @@ are appreciated.
 ## License
 
 MIT, see [LICENSE](LICENSE).
-
-<div align="center">
-<br>
-<sub>Made for a Raspberry Pi 5 that knows where you've been, and tells no one else.</sub>
-</div>
