@@ -147,7 +147,7 @@ Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app)
 
 | Layer | Protection |
 |---|---|
-| **Login** | Basic auth (scrypt hash in `.env`) on every route that reads data. The app $|
+| **Login** | Basic auth (scrypt hash in `.env`) on every route that reads data. The app won't start in production without it, unless `NO_LOGIN=true` turns it off on purpose |
 | **Overland** | Its own bearer token, compared in constant time, 5 MB body limit |
 | **Limits** | Per-IP rate limits and server timeouts; wrong passwords are limited before scrypt runs |
 | **Container** | Non-root user, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
