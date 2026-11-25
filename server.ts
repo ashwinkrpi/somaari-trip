@@ -1,6 +1,6 @@
 import path from 'path';
 import { createApp } from './server/app.ts';
-import { parseAuthHash } from './server/auth.ts';
+import { resolveAuth } from './server/auth.ts';
 import { ensureSampleData } from './server/seedData.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -10,20 +10,13 @@ const HOST = IS_PROD ? '0.0.0.0' : '127.0.0.1';
 // Dev gets its own folder: ./data may hold real location history, and dev has no login by default
 const DATA_DIR = path.join(process.cwd(), IS_PROD ? 'data' : 'data-dev');
 
-const { AUTH_USER, AUTH_HASH } = process.env;
-let auth: { user: string; hash: string } | undefined;
-if (AUTH_USER && AUTH_HASH) {
-  if (!parseAuthHash(AUTH_HASH)) {
-    console.error('AUTH_HASH is not a valid scrypt hash (generate one with npm run hash-password)');
-    process.exit(1);
-  }
-  auth = { user: AUTH_USER, hash: AUTH_HASH };
-} else if (IS_PROD) {
-  console.error('AUTH_USER and AUTH_HASH are required in production (npm run hash-password)');
+const authConfig = resolveAuth(process.env, IS_PROD);
+if (authConfig.error) {
+  console.error(authConfig.error);
   process.exit(1);
-} else {
-  console.warn('AUTH_USER/AUTH_HASH not set: no login required (dev only)');
 }
+if (authConfig.warning) console.warn(authConfig.warning);
+const { auth } = authConfig;
 
 // Ensure sample data exists on launch
 ensureSampleData(DATA_DIR);

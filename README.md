@@ -98,7 +98,7 @@ Compose plugin, and Overland on your iPhone. The [guide](docs/GUIDE.md) covers t
 - [Install with Docker](docs/GUIDE.md#install-with-docker) and
   [who can reach it](docs/GUIDE.md#who-can-reach-it) (LAN, ZeroTier/Tailscale, reboots)
 - [Settings](docs/GUIDE.md#settings): every `.env` option and its default
-- [Login](docs/GUIDE.md#login): creating and changing the password
+- [Login](docs/GUIDE.md#login): creating and changing the password, or turning the login off
 - [Overland (iPhone)](docs/GUIDE.md#overland-iphone): app settings and checking uploads arrive
 - [Data files](docs/GUIDE.md#data-files): CSV format, ownership, backups
 - [Updating](docs/GUIDE.md#updating) and [trying it with sample data](docs/GUIDE.md#try-it-with-sample-data)
@@ -147,7 +147,7 @@ Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app)
 
 | Layer | Protection |
 |---|---|
-| **Login** | Basic auth (scrypt hash in `.env`) on every route that reads data. The app won't start in production without it |
+| **Login** | Basic auth (scrypt hash in `.env`) on every route that reads data. The app $|
 | **Overland** | Its own bearer token, compared in constant time, 5 MB body limit |
 | **Limits** | Per-IP rate limits and server timeouts; wrong passwords are limited before scrypt runs |
 | **Container** | Non-root user, read-only root filesystem, all capabilities dropped, `no-new-privileges` |

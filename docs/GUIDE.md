@@ -66,7 +66,7 @@ cd somaari-trip
 #    and uploads fail
 mkdir -p data
 
-# 3. Login (required: the app won't start without it). Prompts for the password
+# 3. Login (the app won't start without it, unless you choose NO_LOGIN; see Login). Prompts for the password
 npm ci
 npm run -s hash-password -- <user> >> .env
 
@@ -160,6 +160,7 @@ Docker Compose reads these from `.env` next to `docker-compose.yml` (see `.env.e
 | Setting | Default | What it does |
 |---|---|---|
 | `AUTH_USER`, `AUTH_HASH` | none (required) | Login for the web app. Create with `npm run hash-password`, see [Login](#login) |
+| `NO_LOGIN` | `false` | `true` turns the login off (`AUTH_USER`/`AUTH_HASH` are then not needed), see [Login](#login) |
 | `OVERLAND_TOKEN` | none (required) | Shared secret the phone sends with uploads. `openssl rand -hex 32` |
 | `DATA_DIR` | `./data` | Folder on the server with the daily CSV files. Mounted read-write: uploads are appended here. Leave it unset unless the files need to live outside the project folder |
 | `SOMAARI_TRIP_BIND` | `127.0.0.1` | Address to listen on, see [Who can reach it](#who-can-reach-it) |
@@ -182,6 +183,14 @@ stores a scrypt hash, never the password.
   least 12 characters) and appends `AUTH_USER` and `AUTH_HASH`.
 - **Change it:** delete the old `AUTH_USER` and `AUTH_HASH` lines from `.env`, run the command
   again, then `docker compose up -d`.
+- **No login at all:** add `NO_LOGIN=true` to `.env` and run `docker compose up -d`. The browser
+  no longer asks for anything, and `AUTH_USER`/`AUTH_HASH` are ignored. Overland uploads still need
+  `OVERLAND_TOKEN`.
+
+> [!WARNING]
+> With `NO_LOGIN=true`, anyone who can reach the port can see your whole location history. Use it
+> with `SOMAARI_TRIP_BIND=127.0.0.1` (this machine only), or on a network where you trust every
+> device. With `0.0.0.0` that includes everyone on your home wifi.
 
 ### Overland (iPhone)
 
@@ -249,7 +258,7 @@ Commas and line breaks inside values are replaced (`;` and a space), so files ne
 
 Open `http://<server-ip>:18473` (or your `SOMAARI_TRIP_PORT`). The browser asks for a username
 and password: the `AUTH_USER` and the password you gave `npm run hash-password`. The browser
-remembers them until you close it. Mistyping the password many times in a row gets you briefly
+remembers them until you close it. With `NO_LOGIN=true` it opens straight away. Mistyping the password many times in a row gets you briefly
 rate limited; wait a few seconds and try again.
 
 ### The screen
@@ -364,7 +373,7 @@ close it. Picking a day closes it for you. Everything else works the same as on 
 **Installing and running**
 
 <details>
-<summary><b><code>docker compose</code> says <code>set AUTH_USER and AUTH_HASH</code> or <code>set OVERLAND_TOKEN</code></b></summary>
+<summary><b><code>docker compose</code> says <code>set OVERLAND_TOKEN</code></b></summary>
 
 Those lines are missing from `.env`; see [Install with Docker](#install-with-docker).
 </details>
@@ -372,8 +381,9 @@ Those lines are missing from `.env`; see [Install with Docker](#install-with-doc
 <details>
 <summary><b>The container stops right after starting</b></summary>
 
-Run `docker logs somaari-trip`. "AUTH_HASH is not a valid scrypt hash" means the hash line got cut
-or mangled; create it again ([Login](#login)).
+Run `docker logs somaari-trip`. "AUTH_USER and AUTH_HASH are required" means `.env` has neither a
+login nor `NO_LOGIN=true`. "AUTH_HASH is not a valid scrypt hash" means the hash line got cut or
+mangled; create it again ([Login](#login)).
 </details>
 
 <details>

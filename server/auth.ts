@@ -105,3 +105,36 @@ export function basicAuth({ user, hash, allowAttempt, onFailure }: BasicAuthOpti
     challenge(res);
   };
 }
+
+export type AuthConfig =
+  | { auth: { user: string; hash: string }; warning?: undefined; error?: undefined }
+  | { auth?: undefined; warning: string; error?: undefined }
+  | { auth?: undefined; warning?: undefined; error: string };
+
+/**
+ * Login settings from the environment. NO_LOGIN=true turns the login off on purpose (like a
+ * LAN-only app with no accounts); otherwise production needs AUTH_USER/AUTH_HASH.
+ */
+export function resolveAuth(env: NodeJS.ProcessEnv, isProd: boolean): AuthConfig {
+  const { AUTH_USER, AUTH_HASH, NO_LOGIN } = env;
+  if (NO_LOGIN === 'true') {
+    return {
+      warning:
+        'NO_LOGIN=true: no login, anyone who can reach this port can see your location history',
+    };
+  }
+  if (NO_LOGIN && NO_LOGIN !== 'false') return { error: 'NO_LOGIN must be true or false' };
+  if (AUTH_USER && AUTH_HASH) {
+    if (!parseAuthHash(AUTH_HASH)) {
+      return { error: 'AUTH_HASH is not a valid scrypt hash (generate one with npm run hash-password)' };
+    }
+    return { auth: { user: AUTH_USER, hash: AUTH_HASH } };
+  }
+  if (isProd) {
+    return {
+      error:
+        'AUTH_USER and AUTH_HASH are required in production (npm run hash-password), or set NO_LOGIN=true',
+    };
+  }
+  return { warning: 'AUTH_USER/AUTH_HASH not set: no login required (dev only)' };
+}

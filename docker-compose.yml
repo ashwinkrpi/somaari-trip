@@ -18,8 +18,10 @@ services:
       - PORT=3000
       # Small young generation: ~20 MB less RSS after parsing, ~3% slower
       - NODE_OPTIONS=--max-old-space-size=96 --max-semi-space-size=4
-      - AUTH_USER=${AUTH_USER:?set AUTH_USER and AUTH_HASH in .env (npm run hash-password)}
-      - AUTH_HASH=${AUTH_HASH:?set AUTH_USER and AUTH_HASH in .env (npm run hash-password)}
+      # Login (npm run hash-password), or NO_LOGIN=true for none. The app checks these on start
+      - AUTH_USER=${AUTH_USER:-}
+      - AUTH_HASH=${AUTH_HASH:-}
+      - NO_LOGIN=${NO_LOGIN:-false}
       - OVERLAND_TOKEN=${OVERLAND_TOKEN:?set OVERLAND_TOKEN in .env}
     ports:
       # Localhost-only by default (Docker-published ports bypass ufw).
