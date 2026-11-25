@@ -201,6 +201,30 @@ export function extractStops(points: ParsedPoint[]): StopFeature[] {
 /**
  * Form GeoJSON LineStrings from points, splitting trips on > 5 min gaps (300s)
  */
+/** A trip that sits still for longer than this at the end ends at its last movement */
+export const IDLE_TAIL_MS = 10 * 60 * 1000;
+/** Faster than this counts as moving (same threshold as the moving average) */
+const MOVING_MPS = 0.5;
+
+/**
+ * Drops the stationary points after a trip's last movement when they last over IDLE_TAIL_MS,
+ * e.g. when Overland kept recording after you arrived. Points must be sorted. A trip that
+ * never moves (or has no speeds) is left as it is. The dropped points still count for stops.
+ */
+export function trimIdleTail(points: ParsedPoint[]): ParsedPoint[] {
+  let lastMoving = -1;
+  for (let i = points.length - 1; i >= 0; i--) {
+    const v = points[i].speed_mps;
+    if (v !== undefined && v > MOVING_MPS) {
+      lastMoving = i;
+      break;
+    }
+  }
+  if (lastMoving < 0) return points;
+  const idleMs = points[points.length - 1].timeMs - points[lastMoving].timeMs;
+  return idleMs > IDLE_TAIL_MS ? points.slice(0, lastMoving + 1) : points;
+}
+
 export function buildTripFeatures(points: ParsedPoint[]): TripFeature[] {
   const tripsById: Record<string, ParsedPoint[]> = {};
   for (const pt of points) {
@@ -212,10 +236,11 @@ export function buildTripFeatures(points: ParsedPoint[]): TripFeature[] {
 
   const features: TripFeature[] = [];
 
-  for (const [trip_id, tripPoints] of Object.entries(tripsById)) {
-    if (tripPoints.length === 0) continue;
+  for (const [trip_id, allTripPoints] of Object.entries(tripsById)) {
+    if (allTripPoints.length === 0) continue;
 
-    tripPoints.sort((a, b) => a.timeMs - b.timeMs);
+    allTripPoints.sort((a, b) => a.timeMs - b.timeMs);
+    const tripPoints = trimIdleTail(allTripPoints);
 
     const segments: TripSegment[] = [];
     let currentSegment: TripSegment = { points: [] };

@@ -326,6 +326,9 @@ distance, duration and average speed.
 - **"N segments (gaps >5m)"** means the phone recorded nothing for more than 5 minutes during the
   trip (tunnel, phone off, no GPS). The route isn't drawn across the gap, so the trip shows as
   separate pieces.
+- **Forgot to stop Overland?** When a trip sits still for more than 10 minutes at the end, it
+  ends at the last time you moved, so its duration and average speed aren't stretched. The time
+  you sat there still shows as a [stop](#stops).
 - **Clicking a route on the map** selects that trip too. When routes are coloured by mode, it also
   opens a popup with distance, duration, average and maximum speed, and start and end time.
 

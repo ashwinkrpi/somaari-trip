@@ -210,6 +210,40 @@ describe('buildTripFeatures', () => {
     expect(buildTripFeatures(noDistance)[0].properties.distance_m).toBeCloseTo(1112, -1);
   });
 
+  it('ends a trip at its last movement when it then sits still for over 10 minutes', () => {
+    const moving = [0, 1, 2, 3].map(m => ({ timestamp: at(start, m), speed_mps: 10, trip_distance_m: m * 600 }));
+    // Overland left running: 2 hours parked, with good accuracy
+    const parked = Array.from({ length: 24 }, (_, i) => 5 + i * 5).map(m => ({
+      timestamp: at(start, m),
+      speed_mps: 0,
+      motion: 'stationary',
+      trip_distance_m: 1800,
+    }));
+    const points = parseCsvPoints(csv([...moving, ...parked]));
+    const [trip] = buildTripFeatures(points);
+    expect(trip.properties.duration_s).toBe(3 * 60);
+    expect(trip.properties.end_time).toBe(at(start, 3));
+    expect(trip.properties.distance_m).toBe(1800);
+    expect(trip.properties.avg_speed_mps).toBe(10);
+    // The parked time still shows as a stop
+    expect(extractStops(points)).toHaveLength(1);
+  });
+
+  it('keeps short pauses at the end, and trips that never move', () => {
+    const shortPause = parseCsvPoints(
+      csv([
+        { timestamp: at(start, 0), speed_mps: 10 },
+        { timestamp: at(start, 1), speed_mps: 10 },
+        { timestamp: at(start, 10), speed_mps: 0 },
+      ])
+    );
+    expect(buildTripFeatures(shortPause)[0].properties.duration_s).toBe(10 * 60);
+    const neverMoves = parseCsvPoints(
+      csv([0, 30, 60].map(m => ({ timestamp: at(start, m), speed_mps: 0 })))
+    );
+    expect(buildTripFeatures(neverMoves)[0].properties.duration_s).toBe(60 * 60);
+  });
+
   it('groups by trip id, picks the majority mode and sorts by start', () => {
     const points = parseCsvPoints(
       csv([

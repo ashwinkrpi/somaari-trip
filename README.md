@@ -54,7 +54,8 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
      treats `speed=-1` as unknown rather than stopped. Day summaries are cached per file until it
      changes, and parsed points sit in a capped LRU (~100k points), so memory doesn't grow with
      history.
-   - Groups points by `trip_id`, splits trips on gaps over 5 minutes, and computes distance
+   - Groups points by `trip_id`, splits trips on gaps over 5 minutes, ends a trip at its last
+     movement when it then sits still for over 10 minutes, and computes distance
      (from Overland's `trip_distance_m`, or point to point when that's missing), duration and
      speeds. Stops are 3+ consecutive stationary points of one trip with no gap over 15 minutes;
      a point is stationary when `motion` says so, or its speed is 0 with accuracy within 30 m.
