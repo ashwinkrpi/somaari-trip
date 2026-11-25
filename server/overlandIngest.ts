@@ -19,8 +19,15 @@ function esc(value: unknown): string {
 
 /**
  * Converts an Overland batch (`{ locations: Feature[], trip? }`) into CSV rows grouped by
- * the IST date of each point. Points with a missing or invalid timestamp are dropped.
+ * the IST date of each point. Points with a missing or invalid timestamp are dropped, and so
+ * are features that aren't GPS fixes: every fix has `horizontal_accuracy`; the record Overland
+ * sends when a trip ends (`type: "trip"`) has none, and stored as a point it became a fake
+ * hours-long trip with no trip_id.
  */
+export function isGpsFix(p: any): boolean {
+  return p?.type !== 'trip' && typeof p?.horizontal_accuracy === 'number';
+}
+
 export function overlandToDailyRows(body: any): DailyRows[] {
   const trip = body?.trip ?? {};
   const locations: any[] = Array.isArray(body?.locations) ? body.locations : [];
@@ -28,6 +35,7 @@ export function overlandToDailyRows(body: any): DailyRows[] {
 
   for (const loc of locations) {
     const p = loc?.properties ?? {};
+    if (!isGpsFix(p)) continue;
     const timeMs = new Date(p.timestamp).getTime();
     if (!p.timestamp || isNaN(timeMs)) continue;
 

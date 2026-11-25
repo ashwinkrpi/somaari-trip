@@ -246,7 +246,7 @@ timestamp,trip_id,lat,lon,speed_mps,speed_accuracy,course,course_accuracy,altitu
 | Column | Meaning |
 |---|---|
 | `timestamp` | ISO 8601 UTC, e.g. `2026-08-30T03:30:00.000Z`. Shown in IST |
-| `trip_id` | Groups points into one trip. Points without one form a single trip |
+| `trip_id` | Groups points into one trip. Points without one form a single trip. A row with no `trip_id`, `accuracy_m` or `speed_mps` isn't a GPS fix (older versions saved Overland's trip-ended record this way) and is ignored |
 | `lat`, `lon` | Position in degrees |
 | `speed_mps` | Speed in metres per second; `-1` means unknown. `0` with good accuracy counts as stationary |
 | `accuracy_m` | Horizontal accuracy in metres. Points worse than the app's accuracy filter (default 50 m) are hidden |

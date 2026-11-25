@@ -87,6 +87,20 @@ describe('parseCsvPoints', () => {
     expect(parseCsvPoints(csv(rows), 100)).toHaveLength(2);
   });
 
+  it("ignores rows with no trip_id, accuracy or speed (Overland's trip-ended record)", () => {
+    const points = parseCsvPoints(
+      csv([
+        { timestamp: '2026-01-01T10:00:00Z' },
+        { timestamp: '2026-01-01T10:01:00Z', trip_id: '', accuracy_m: '', speed_mps: '' },
+        { timestamp: '2026-01-01T14:00:00Z', trip_id: '', accuracy_m: '', speed_mps: '' },
+        // Any one of them present: still a point
+        { timestamp: '2026-01-01T10:02:00Z', trip_id: '', accuracy_m: 15, speed_mps: '' },
+      ])
+    );
+    expect(points.map(p => p.timestamp)).toEqual(['2026-01-01T10:00:00Z', '2026-01-01T10:02:00Z']);
+    expect(buildTripFeatures(points).map(t => t.properties.duration_s)).toEqual([0, 0]);
+  });
+
   it('normalises trip mode and fills defaults', () => {
     const [p] = parseCsvPoints(
       'timestamp,lat,lon,trip_mode\n2026-01-01T10:00:00Z,12.9,77.5, Walking '

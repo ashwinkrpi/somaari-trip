@@ -54,6 +54,19 @@ describe('overlandToDailyRows', () => {
     expect(cols[1][14]).toBe('a;b');
   });
 
+  it("skips features that aren't GPS fixes (Overland's trip-ended record)", () => {
+    const tripEnded = {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [77.5, 12.9] },
+      properties: { type: 'trip', timestamp: '2026-10-13T11:00:00Z', mode: 'taxi', distance: 1234 },
+    };
+    const noAccuracy = feature({ horizontal_accuracy: undefined, trip_id: undefined, speed: undefined });
+    const out = overlandToDailyRows({ locations: [tripEnded, noAccuracy, feature({})], trip: TRIP });
+    expect(out).toHaveLength(1);
+    expect(out[0].rows).toHaveLength(1);
+    expect(out[0].rows[0].split(',')[1]).toBe('2026-10-13T09:10:00Z');
+  });
+
   it('joins motion arrays and leaves empty motion blank', () => {
     const out = overlandToDailyRows({ locations: [feature({ motion: ['walking'] }), feature({ motion: [] })] });
     expect(out[0].rows.map(r => r.split(',')[13])).toEqual(['walking', '']);

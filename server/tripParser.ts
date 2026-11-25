@@ -65,9 +65,16 @@ export function parseCsvPoints(csvContent: string, maxAccuracy = 50): ParsedPoin
   });
 
   const validPoints: ParsedPoint[] = [];
+  const fields = result.meta.fields ?? [];
+  const hasFixColumns = ['trip_id', 'accuracy_m', 'speed_mps'].every((f) => fields.includes(f));
+  const blank = (v: unknown) => v === undefined || v === null || String(v).trim() === '';
 
   for (const row of result.data) {
     if (!row.timestamp || row.lat === undefined || row.lon === undefined) continue;
+    // Overland's trip-ended record, stored as a point by older versions of the ingest: no
+    // trip_id, accuracy or speed. Only when the file has those columns, so CSVs without them
+    // still load.
+    if (hasFixColumns && blank(row.trip_id) && blank(row.accuracy_m) && blank(row.speed_mps)) continue;
 
     const lat = typeof row.lat === 'number' ? row.lat : parseFloat(row.lat);
     const lon = typeof row.lon === 'number' ? row.lon : parseFloat(row.lon);
