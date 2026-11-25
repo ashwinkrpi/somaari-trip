@@ -33,7 +33,7 @@
   <!-- Flow labels -->
   <text class="label" x="62" y="102">POST /api/overland</text>
   <text class="label" x="62" y="122">bearer token</text>
-  <text class="label" x="467" y="112">basic auth</text>
+  <text class="label" x="467" y="112">login cookie</text>
   <text class="label" x="62" y="230">append rows</text>
   <text class="label" x="62" y="250">by IST day</text>
   <text class="label" x="487" y="554">on cache miss</text>

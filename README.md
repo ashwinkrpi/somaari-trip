@@ -45,7 +45,7 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
 1. **Phone (Overland iOS)** logs GPS points in the background and POSTs them in batches (JSON
    `locations` array) to `/api/overland`, with a bearer token, over your LAN or a private network.
 2. **Ingest** (only when `OVERLAND_TOKEN` is set; token instead of the login, 5 MB body limit,
-   own rate limit) buckets each point by its **IST** date and appends rows to
+   own rate limit) skips Overland's trip-ended record (not a GPS fix), buckets each point by its **IST** date and appends rows to
    `trips_YYYY-MM-DD.csv`, writing the header for a new file. It replies only after the rows are
    on disk; on failure it returns 500 so Overland keeps the batch and retries.
 3. **Storage** is plain CSV files on disk, one per IST day: no database.
@@ -89,7 +89,7 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
   and memory that doesn't grow with years of history.
 
 > [!NOTE]
-> No accounts, no API keys, no third-party services. The only things outside your network are
+> No sign-ups, no API keys, no third-party services. The only things outside your network are
 > the map tile servers, and only your server talks to them.
 
 ## Install
@@ -115,6 +115,7 @@ Compose plugin, and Overland on your iPhone. The [guide](docs/GUIDE.md) covers t
 | **Display** → **By Speed** | Routes coloured green → red by speed, with a legend |
 | **Display** → **Filter By Mode** | Only walking, only driving, … everywhere on the page |
 | **↻** next to the title | Loads points uploaded since you opened the page |
+| The arrow next to your user name | Logs out (on a phone: **Log out** under the title) |
 
 Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app).
 
@@ -193,7 +194,7 @@ There's no reverse proxy in front: Express does the login, limits and headers it
 | `GET /api/trips?from=…&to=…` | The same for a range of days (either end may be left out) |
 | `…&max_accuracy=50` | Drops points less accurate than this many metres (default 50) |
 | `GET /api/session` | `{"loginRequired", "authenticated", "user"}`, no login needed |
-| `POST /api/login` | JSON `{"user", "password", "remember"}`; sets the session cookie. 401 wrong, 429 blocked |
+| `POST /api/login` | JSON `{"user", "password", "remember"}`; sets the session cookie. 401 wrong, 429 blocked, 404 with `NO_LOGIN=true`, 503 if `auth.json` is missing or broken |
 | `POST /api/logout` | Clears the session cookie |
 | `GET /api/health` | `{"status":"ok", …}`, no login needed |
 | `POST /api/overland` | Overland batch upload (bearer token, not the login). 401 bad token, 400 no `locations` array, `{"result":"ok"}` once on disk, 500 if the write failed |

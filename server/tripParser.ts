@@ -198,9 +198,6 @@ export function extractStops(points: ParsedPoint[]): StopFeature[] {
   return stops;
 }
 
-/**
- * Form GeoJSON LineStrings from points, splitting trips on > 5 min gaps (300s)
- */
 /** A trip that sits still for longer than this at the end ends at its last movement */
 export const IDLE_TAIL_MS = 10 * 60 * 1000;
 /** Faster than this counts as moving (same threshold as the moving average) */
@@ -225,6 +222,9 @@ export function trimIdleTail(points: ParsedPoint[]): ParsedPoint[] {
   return idleMs > IDLE_TAIL_MS ? points.slice(0, lastMoving + 1) : points;
 }
 
+/**
+ * Form GeoJSON LineStrings from points, splitting trips on > 5 min gaps (300s)
+ */
 export function buildTripFeatures(points: ParsedPoint[]): TripFeature[] {
   const tripsById: Record<string, ParsedPoint[]> = {};
   for (const pt of points) {

@@ -85,7 +85,7 @@ export function createApp(opts: AppOptions): CreatedApp {
   /**
    * POST /api/overland - Overland iOS batch upload, appended to the daily CSVs.
    * Only registered when overlandToken is set. Token via `Authorization: Bearer` or `?token=`
-   * (the phone can't do basic auth). Replies only after the rows are on disk; any error
+   * (the phone has no session cookie). Replies only after the rows are on disk; any error
    * returns 500 so Overland retries the batch.
    */
   if (opts.overlandToken) {

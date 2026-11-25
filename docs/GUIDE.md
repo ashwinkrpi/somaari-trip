@@ -398,7 +398,7 @@ close it. Picking a day closes it for you. Everything else works the same as on 
 <details>
 <summary><b><code>docker compose</code> says <code>set OVERLAND_TOKEN</code></b></summary>
 
-Those lines are missing from `.env`; see [Install with Docker](#install-with-docker).
+That line is missing from `.env`; see [Install with Docker](#install-with-docker).
 </details>
 
 <details>
