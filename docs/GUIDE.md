@@ -276,7 +276,8 @@ password (see [Login](#login)). With `NO_LOGIN=true` the app opens straight away
 
 - Tick **Keep me logged in for 30 days** to stay logged in. Without it, you stay logged in while
   the browser is open, up to a day without using the app.
-- **Log out** is the arrow icon at the top of the sidebar, next to refresh.
+- The user you're logged in as is shown at the top of the sidebar, with **Log out** (the arrow
+  icon) next to it. On a phone they're on their own line under the title.
 - After 5 wrong passwords from one address within 15 minutes, that address is blocked for 15
   minutes. Each wrong password also waits a second.
 

@@ -12,6 +12,7 @@ import {
   Sliders,
   RefreshCw,
   LogOut,
+  UserRound,
   Compass,
   CalendarRange,
   X,
@@ -39,6 +40,8 @@ interface SidebarProps {
   onToggleModeFilter: (mode: string) => void;
   isLoading: boolean;
   onRefreshDays: () => void;
+  /** The logged-in user, shown in the header */
+  user?: string;
   /** Shown only when the server has a login */
   onLogout?: () => void;
 }
@@ -65,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleModeFilter,
   isLoading,
   onRefreshDays,
+  user,
   onLogout,
 }) => {
   const [activeTab, setActiveTab] = useState<'calendar' | 'trips' | 'settings'>('calendar');
@@ -130,20 +134,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
+          {user && (
+            <span
+              id="current-user"
+              title={`Logged in as ${user}`}
+              className="ml-1 hidden md:flex items-center gap-1 max-w-[7.5rem] text-[11px] text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md px-1.5 py-1"
+            >
+              <UserRound className="w-3 h-3 shrink-0 text-neutral-400" />
+              <span className="truncate">{user}</span>
+            </span>
+          )}
           {onLogout && (
             <button
               id="btn-logout"
               type="button"
               onClick={onLogout}
-              title="Log out"
-              aria-label="Log out"
-              className="p-1.5 text-neutral-400 hover:text-white rounded-md hover:bg-neutral-800 transition"
+              title={user ? `Log out ${user}` : 'Log out'}
+              aria-label={user ? `Log out ${user}` : 'Log out'}
+              className="hidden md:block p-1.5 text-neutral-400 hover:text-white rounded-md hover:bg-neutral-800 transition"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
+
+      {/* Phones: the header has no room for the user name and Log out, so they get their own row */}
+      {onLogout && (
+        <div
+          id="current-user-mobile"
+          className="md:hidden pl-4 pr-2 py-1 border-b border-neutral-800/60 flex items-center gap-1.5 text-[11px] text-neutral-400"
+        >
+          <UserRound className="w-3 h-3 shrink-0" />
+          <span className="truncate flex-1">
+            {user ? (
+              <>
+                Logged in as <span className="text-neutral-200">{user}</span>
+              </>
+            ) : (
+              'Logged in'
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-neutral-300 hover:text-white hover:bg-neutral-800 transition"
+          >
+            <LogOut className="w-3 h-3" />
+            Log out
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="px-3 pt-2 pb-1 flex border-b border-neutral-800/60 gap-1 bg-neutral-900/40">

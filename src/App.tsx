@@ -73,7 +73,7 @@ function summarizeTrips(
   };
 }
 
-type AuthState = { status: 'checking' } | { status: 'login'; notice?: string } | { status: 'in'; loginRequired: boolean };
+type AuthState = { status: 'checking' } | { status: 'login'; notice?: string } | { status: 'in'; loginRequired: boolean; user?: string };
 
 /** Shows the login screen until there's a session (or the server has no login) */
 export default function App() {
@@ -84,7 +84,9 @@ export default function App() {
       const res = await fetch('/api/session', { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const s: SessionResponse = await res.json();
-      setAuth(s.authenticated ? { status: 'in', loginRequired: s.loginRequired } : { status: 'login' });
+      setAuth(
+        s.authenticated ? { status: 'in', loginRequired: s.loginRequired, user: s.user } : { status: 'login' },
+      );
     } catch (err) {
       console.error('Failed to check the session:', err);
       setAuth({ status: 'login', notice: 'Could not reach the server. Try again.' });
@@ -115,6 +117,7 @@ export default function App() {
   }
   return (
     <TripViewer
+      user={auth.user}
       onLogout={auth.loginRequired ? handleLogout : undefined}
       onUnauthorized={handleUnauthorized}
     />
@@ -122,13 +125,15 @@ export default function App() {
 }
 
 interface TripViewerProps {
+  /** The logged-in user (none with NO_LOGIN) */
+  user?: string;
   /** Only when the server has a login */
   onLogout?: () => void;
   /** An API call returned 401: the session ended */
   onUnauthorized: () => void;
 }
 
-function TripViewer({ onLogout, onUnauthorized }: TripViewerProps) {
+function TripViewer({ user, onLogout, onUnauthorized }: TripViewerProps) {
   const [days, setDays] = useState<DaySummary[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedRange, setSelectedRange] = useState<{ from: string; to: string } | null>(null);
@@ -316,6 +321,7 @@ function TripViewer({ onLogout, onUnauthorized }: TripViewerProps) {
           onToggleModeFilter={handleToggleModeFilter}
           isLoading={isLoading}
           onRefreshDays={handleRefresh}
+          user={user}
           onLogout={onLogout}
         />
       </div>
