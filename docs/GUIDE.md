@@ -51,7 +51,6 @@ For how it works inside, privacy, security, the API and development, see the [RE
 |---|---|
 | 🖥️ A Linux machine that stays on | A **Raspberry Pi 5** (ARM64) or any x86_64 home server. About 100 MB of RAM, a 120 MB image and up to 1 GB for the map tile cache |
 | 🐳 **Docker** with the Compose plugin | Runs the app (`docker compose`) |
-| 🟩 **Node.js 20+** | Only to create the login hash. Or run `npm run hash-password` on any other machine and copy the two lines it prints |
 | 📱 **Overland** for iOS | Records your location and uploads it |
 | 🔗 A network the phone can reach the server on | Your home wifi, or ZeroTier / Tailscale so it also works away from home |
 
@@ -66,21 +65,21 @@ cd somaari-trip
 #    and uploads fail
 mkdir -p data
 
-# 3. Login (the app won't start without it, unless you choose NO_LOGIN; see Login). Prompts for the password
-npm ci
-npm run -s hash-password -- <user> >> .env
-
-# 4. Who can reach it (default 127.0.0.1: this machine only). See "Who can reach it"
+# 3. Who can reach it (default 127.0.0.1: this machine only). See "Who can reach it"
 echo "SOMAARI_TRIP_BIND=0.0.0.0" >> .env
 
-# 5. Token for Overland uploads (required, even if you don't use Overland yet)
+# 4. Token for Overland uploads (required, even if you don't use Overland yet)
 echo "OVERLAND_TOKEN=$(openssl rand -hex 32)" >> .env
 
-# 6. Build and start
+# 5. Build and start
 docker compose up -d --build
+
+# 6. The login it made for you (shown only on the first start)
+docker logs somaari-trip 2>&1 | grep -A2 'No login was set'
 ```
 
-Then open **`http://<server-ip>:18473`** and sign in. `<server-ip>` is any address of the server
+Write the password down, then open **`http://<server-ip>:18473`** and log in as `admin`. To
+choose your own user name and password, see [Login](#login). `<server-ip>` is any address of the server
 that your device can reach: its LAN IP at home, its ZeroTier/Tailscale IP from anywhere. The
 container restarts by itself after crashes and reboots.
 
@@ -103,7 +102,7 @@ container restarts by itself after crashes and reboots.
 > router is what keeps it off the internet. For access away from home use ZeroTier, Tailscale or
 > WireGuard.
 
-- **With `0.0.0.0`**, anyone on your LAN can reach the login page, and on the LAN the password
+- **With `0.0.0.0`**, anyone on your LAN can reach the login screen, and on the LAN the password
   travels as plain HTTP (ZeroTier/Tailscale encrypt their link). Fine on a home network you trust.
   Give the server a DHCP reservation on the router so its LAN IP doesn't change.
 - **With a single ZeroTier/Tailscale IP, reboots can break it.** Docker can start before that
@@ -159,8 +158,7 @@ Docker Compose reads these from `.env` next to `docker-compose.yml` (see `.env.e
 
 | Setting | Default | What it does |
 |---|---|---|
-| `AUTH_USER`, `AUTH_HASH` | none (required) | Login for the web app. Create with `npm run hash-password`, see [Login](#login) |
-| `NO_LOGIN` | `false` | `true` turns the login off (`AUTH_USER`/`AUTH_HASH` are then not needed), see [Login](#login) |
+| `NO_LOGIN` | `false` | `true` turns the login off, see [Login](#login). The login itself isn't a setting: it's in `auth.json` |
 | `OVERLAND_TOKEN` | none (required) | Shared secret the phone sends with uploads. `openssl rand -hex 32` |
 | `DATA_DIR` | `./data` | Folder on the server with the daily CSV files. Mounted read-write: uploads are appended here. Leave it unset unless the files need to live outside the project folder |
 | `SOMAARI_TRIP_BIND` | `127.0.0.1` | Address to listen on, see [Who can reach it](#who-can-reach-it) |
@@ -176,16 +174,29 @@ Docker Compose reads these from `.env` next to `docker-compose.yml` (see `.env.e
 
 ### Login
 
-The app uses one username and password, checked by the browser's own sign-in prompt. `.env`
-stores a scrypt hash, never the password.
+There is one user name and password, entered on the app's own login screen. They live in
+`auth.json` in the data folder, with only a scrypt hash of the password (never the password
+itself) and the secret that signs sessions. The file is readable only by `INGEST_UID`.
 
-- **Create it:** `npm run -s hash-password -- <user> >> .env` asks for the password twice (at
-  least 12 characters) and appends `AUTH_USER` and `AUTH_HASH`.
-- **Change it:** delete the old `AUTH_USER` and `AUTH_HASH` lines from `.env`, run the command
-  again, then `docker compose up -d`.
-- **No login at all:** add `NO_LOGIN=true` to `.env` and run `docker compose up -d`. The browser
-  no longer asks for anything, and `AUTH_USER`/`AUTH_HASH` are ignored. Overland uploads still need
-  `OVERLAND_TOKEN`.
+- **First start:** if there's no login yet, the app makes one (user name `admin`, a random
+  16-character password) and prints it **once** to the log:
+  `docker logs somaari-trip 2>&1 | grep -A2 'No login was set'`. Later starts never print it.
+- **Change it:** `docker exec -it somaari-trip somaari-trip setpassword` asks for a new password
+  twice (hidden, at least 12 characters). Add `--user <name>` to change the user name too.
+- **New random one:** `docker exec somaari-trip somaari-trip setpassword --random` makes one
+  and prints it once.
+- **Log everyone out:** `docker exec somaari-trip somaari-trip logout-all` ends every session and
+  keeps the password. Changing the password also logs everyone out.
+- **Forgot it?** Run `setpassword` on the server (over SSH if needed). There's no reset from the
+  web page. If the container isn't running, use
+  `docker compose run --rm somaari-trip somaari-trip setpassword` from the project folder.
+- **Older installs** that had `AUTH_USER`/`AUTH_HASH` in `.env`: the next start moves them into
+  `auth.json` (same user name and password), and you can then delete those two lines.
+- **No login at all:** add `NO_LOGIN=true` to `.env` and run `docker compose up -d`. The app
+  opens straight away. Overland uploads still need `OVERLAND_TOKEN`.
+
+The commands work whether the app is running or not; a running app picks up the change on its
+next request.
 
 > [!WARNING]
 > With `NO_LOGIN=true`, anyone who can reach the port can see your whole location history. Use it
@@ -215,7 +226,7 @@ retries later.
 
 Each day is one CSV file in `./data`, named `trips_YYYY-MM-DD.csv` by its **IST** date. The app
 creates and appends to them; you can also copy in files from elsewhere, as long as they use the
-same name pattern and columns. Files with other names are ignored. The files must be writable by
+same name pattern and columns. Files with other names are ignored; `auth.json` next to them holds the [login](#login). The files must be writable by
 `INGEST_UID`/`INGEST_GID` (default 1001); check the owner with `ls -ln data`. Git and Docker builds
 both ignore the folder, so your location history stays out of the repo and the image.
 
@@ -256,10 +267,18 @@ Commas and line breaks inside values are replaced (`;` and a space), so files ne
 
 ### Signing in
 
-Open `http://<server-ip>:18473` (or your `SOMAARI_TRIP_PORT`). The browser asks for a username
-and password: the `AUTH_USER` and the password you gave `npm run hash-password`. The browser
-remembers them until you close it. With `NO_LOGIN=true` it opens straight away. Mistyping the password many times in a row gets you briefly
-rate limited; wait a few seconds and try again.
+<p align="center">
+  <img src="images/login.jpg" alt="The login screen: user name, password, Keep me logged in for 30 days" width="70%">
+</p>
+
+Open `http://<server-ip>:18473` (or your `SOMAARI_TRIP_PORT`) and log in with your user name and
+password (see [Login](#login)). With `NO_LOGIN=true` the app opens straight away.
+
+- Tick **Keep me logged in for 30 days** to stay logged in. Without it, you stay logged in while
+  the browser is open, up to a day without using the app.
+- **Log out** is the arrow icon at the top of the sidebar, next to refresh.
+- After 5 wrong passwords from one address within 15 minutes, that address is blocked for 15
+  minutes. Each wrong password also waits a second.
 
 ### The screen
 
@@ -381,9 +400,10 @@ Those lines are missing from `.env`; see [Install with Docker](#install-with-doc
 <details>
 <summary><b>The container stops right after starting</b></summary>
 
-Run `docker logs somaari-trip`. "AUTH_USER and AUTH_HASH are required" means `.env` has neither a
-login nor `NO_LOGIN=true`. "AUTH_HASH is not a valid scrypt hash" means the hash line got cut or
-mangled; create it again ([Login](#login)).
+Run `docker logs somaari-trip`. A message about `auth.json` means the login file is broken: set a
+new password with `docker compose run --rm somaari-trip somaari-trip setpassword` ([Login](#login)).
+"AUTH_HASH is not a valid scrypt hash" means an old `AUTH_HASH` line in `.env` got cut or mangled;
+delete both `AUTH_` lines and set a password the same way.
 </details>
 
 <details>
@@ -451,9 +471,12 @@ The phone didn't report a speed for those points.
 </details>
 
 <details>
-<summary><b>The browser keeps asking for the password</b></summary>
+<summary><b>The login screen keeps coming back</b></summary>
 
-Check the username and password; if you mistyped several times, wait a few seconds.
+Check the user name and password. "Too many wrong passwords" means wait 15 minutes. "Your session
+ended" means the password was changed or everyone was logged out (`setpassword`, `logout-all`), or
+a session without **Keep me logged in** went a day unused. If you forgot the password, set a new
+one ([Login](#login)).
 </details>
 
 <div align="center">

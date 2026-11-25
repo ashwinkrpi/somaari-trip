@@ -1,9 +1,7 @@
 import crypto from 'crypto';
-import type express from 'express';
-import { tooManyRequests } from './rateLimit.ts';
 
-// AUTH_HASH format: scrypt:N:r:p:<salt base64url>:<hash base64url>
-// No '$' so docker compose doesn't try to interpolate it from .env
+// Password hash format: scrypt:N:r:p:<salt base64url>:<hash base64url>
+// No '$' so docker compose doesn't try to interpolate it from .env (old AUTH_HASH lines)
 const KEY_LEN = 32;
 
 function scrypt(password: string, salt: Buffer, N: number, r: number, p: number): Promise<Buffer> {
@@ -21,7 +19,7 @@ export async function hashPassword(password: string, N = 16384, r = 8, p = 1): P
   return ['scrypt', N, r, p, salt.toString('base64url'), key.toString('base64url')].join(':');
 }
 
-interface ParsedHash {
+export interface ParsedHash {
   N: number;
   r: number;
   p: number;
@@ -42,99 +40,10 @@ export function parseAuthHash(encoded: string): ParsedHash | null {
   return { N, r, p, salt, key };
 }
 
-async function verifyPassword(password: string, h: ParsedHash): Promise<boolean> {
+export async function verifyPassword(password: string, h: ParsedHash): Promise<boolean> {
   const key = await scrypt(password, h.salt, h.N, h.r, h.p);
   return crypto.timingSafeEqual(key, h.key);
 }
 
-const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest();
-
-export interface BasicAuthOptions {
-  user: string;
-  hash: string;
-  /** Called before checking credentials; return false to reject with 429 (too many failures) */
-  allowAttempt: (req: express.Request) => boolean;
-  /** Called after a wrong user/password */
-  onFailure: (req: express.Request) => void;
-}
-
-/**
- * HTTP basic auth against an scrypt hash. Every asset and API call carries the header,
- * so a header that verified once is remembered (by its SHA-256) to skip scrypt next time.
- */
-export function basicAuth({ user, hash, allowAttempt, onFailure }: BasicAuthOptions): express.RequestHandler {
-  const parsed = parseAuthHash(hash);
-  if (!parsed) throw new Error('AUTH_HASH is not a valid scrypt hash (run npm run hash-password)');
-  const expectedUser = sha256(user);
-  const verified = new Set<string>();
-
-  const challenge = (res: express.Response) => {
-    res.set('WWW-Authenticate', 'Basic realm="Somaari Trip", charset="UTF-8"');
-    res.status(401).json({ error: 'Unauthorized' });
-  };
-
-  return async (req, res, next) => {
-    const header = req.get('authorization');
-    if (!header?.startsWith('Basic ')) return challenge(res);
-
-    const headerKey = sha256(header).toString('hex');
-    if (verified.has(headerKey)) return next();
-
-    if (!allowAttempt(req)) return tooManyRequests(res);
-
-    const decoded = Buffer.from(header.slice(6).trim(), 'base64').toString('utf8');
-    const sep = decoded.indexOf(':');
-    const givenUser = sep >= 0 ? decoded.slice(0, sep) : '';
-    const givenPass = sep >= 0 ? decoded.slice(sep + 1) : '';
-
-    try {
-      // Always run scrypt so a wrong user takes as long as a wrong password
-      const passOk = await verifyPassword(givenPass, parsed);
-      const userOk = crypto.timingSafeEqual(sha256(givenUser), expectedUser);
-      if (passOk && userOk) {
-        // Only one user, so this stays tiny; clear it rather than grow if headers churn
-        if (verified.size >= 16) verified.clear();
-        verified.add(headerKey);
-        return next();
-      }
-    } catch (err) {
-      return next(err);
-    }
-
-    onFailure(req);
-    challenge(res);
-  };
-}
-
-export type AuthConfig =
-  | { auth: { user: string; hash: string }; warning?: undefined; error?: undefined }
-  | { auth?: undefined; warning: string; error?: undefined }
-  | { auth?: undefined; warning?: undefined; error: string };
-
-/**
- * Login settings from the environment. NO_LOGIN=true turns the login off on purpose (like a
- * LAN-only app with no accounts); otherwise production needs AUTH_USER/AUTH_HASH.
- */
-export function resolveAuth(env: NodeJS.ProcessEnv, isProd: boolean): AuthConfig {
-  const { AUTH_USER, AUTH_HASH, NO_LOGIN } = env;
-  if (NO_LOGIN === 'true') {
-    return {
-      warning:
-        'NO_LOGIN=true: no login, anyone who can reach this port can see your location history',
-    };
-  }
-  if (NO_LOGIN && NO_LOGIN !== 'false') return { error: 'NO_LOGIN must be true or false' };
-  if (AUTH_USER && AUTH_HASH) {
-    if (!parseAuthHash(AUTH_HASH)) {
-      return { error: 'AUTH_HASH is not a valid scrypt hash (generate one with npm run hash-password)' };
-    }
-    return { auth: { user: AUTH_USER, hash: AUTH_HASH } };
-  }
-  if (isProd) {
-    return {
-      error:
-        'AUTH_USER and AUTH_HASH are required in production (npm run hash-password), or set NO_LOGIN=true',
-    };
-  }
-  return { warning: 'AUTH_USER/AUTH_HASH not set: no login required (dev only)' };
-}
+/** Shortest password setpassword accepts */
+export const MIN_PASSWORD_LENGTH = 12;

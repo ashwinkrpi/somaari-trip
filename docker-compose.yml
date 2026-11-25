@@ -1,7 +1,7 @@
 name: somaari-trip
 
 services:
-  # One Node process: basic auth, static frontend, /api, Overland ingest, map tile cache
+  # One Node process: login, static frontend, /api, Overland ingest, map tile cache
   somaari-trip:
     build:
       context: .
@@ -18,7 +18,9 @@ services:
       - PORT=3000
       # Small young generation: ~20 MB less RSS after parsing, ~3% slower
       - NODE_OPTIONS=--max-old-space-size=96 --max-semi-space-size=4
-      # Login (npm run hash-password), or NO_LOGIN=true for none. The app checks these on start
+      # The login lives in auth.json in the data folder (made on first start; change it with
+      # docker exec -it somaari-trip somaari-trip setpassword). AUTH_USER/AUTH_HASH from older
+      # installs are imported into it once. NO_LOGIN=true runs without a login.
       - AUTH_USER=${AUTH_USER:-}
       - AUTH_HASH=${AUTH_HASH:-}
       - NO_LOGIN=${NO_LOGIN:-false}

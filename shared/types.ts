@@ -114,3 +114,11 @@ export interface TripsResponse {
     avg_speed_kmh: number;
   };
 }
+
+/** GET /api/session */
+export interface SessionResponse {
+  /** False with NO_LOGIN=true (or in dev without a login) */
+  loginRequired: boolean;
+  authenticated: boolean;
+  user?: string;
+}

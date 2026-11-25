@@ -11,6 +11,7 @@ import {
   Calendar,
   Sliders,
   RefreshCw,
+  LogOut,
   Compass,
   CalendarRange,
   X,
@@ -38,6 +39,8 @@ interface SidebarProps {
   onToggleModeFilter: (mode: string) => void;
   isLoading: boolean;
   onRefreshDays: () => void;
+  /** Shown only when the server has a login */
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -62,6 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleModeFilter,
   isLoading,
   onRefreshDays,
+  onLogout,
 }) => {
   const [activeTab, setActiveTab] = useState<'calendar' | 'trips' | 'settings'>('calendar');
   // First click of a range; the next click completes it, a click after that starts over
@@ -126,6 +130,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
+          {onLogout && (
+            <button
+              id="btn-logout"
+              type="button"
+              onClick={onLogout}
+              title="Log out"
+              aria-label="Log out"
+              className="p-1.5 text-neutral-400 hover:text-white rounded-md hover:bg-neutral-800 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 

@@ -63,3 +63,63 @@ export function tooManyRequests(res: express.Response) {
 export function rateLimit(buckets: TokenBuckets): express.RequestHandler {
   return (req, res, next) => (buckets.take(clientKey(req)) ? next() : tooManyRequests(res));
 }
+
+/**
+ * Wrong logins per client: MAX_FAILURES within WINDOW blocks that client for BLOCK.
+ * Bounded, so a flood of addresses can't grow it without limit.
+ */
+export class LoginLimiter {
+  static readonly MAX_FAILURES = 5;
+  static readonly WINDOW_MS = 15 * 60_000;
+  static readonly BLOCK_MS = 15 * 60_000;
+  private static readonly MAX_TRACKED = 4096;
+
+  private failures = new Map<string, number[]>();
+  private blocked = new Map<string, number>();
+
+  constructor(private now: () => number = Date.now) {}
+
+  /** Milliseconds until the client may try again, or 0 */
+  blockedFor(key: string): number {
+    const until = this.blocked.get(key);
+    if (until === undefined) return 0;
+    const left = until - this.now();
+    if (left > 0) return left;
+    this.blocked.delete(key);
+    return 0;
+  }
+
+  /** Records a wrong login; true if this one blocked the client */
+  fail(key: string): boolean {
+    const now = this.now();
+    const recent = (this.failures.get(key) ?? []).filter((t) => now - t < LoginLimiter.WINDOW_MS);
+    recent.push(now);
+    this.failures.delete(key);
+    if (recent.length >= LoginLimiter.MAX_FAILURES) {
+      this.blocked.set(key, now + LoginLimiter.BLOCK_MS);
+      return true;
+    }
+    this.failures.set(key, recent);
+    // Oldest entries first in a Map, so drop from the front
+    for (const map of [this.failures, this.blocked] as Map<string, unknown>[]) {
+      while (map.size > LoginLimiter.MAX_TRACKED) map.delete(map.keys().next().value!);
+    }
+    return false;
+  }
+
+  succeed(key: string) {
+    this.failures.delete(key);
+  }
+
+  sweep() {
+    const now = this.now();
+    for (const [k, times] of this.failures) {
+      if (times.every((t) => now - t >= LoginLimiter.WINDOW_MS)) this.failures.delete(k);
+    }
+    for (const [k, until] of this.blocked) if (until <= now) this.blocked.delete(k);
+  }
+
+  get size() {
+    return this.failures.size + this.blocked.size;
+  }
+}

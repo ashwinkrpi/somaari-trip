@@ -10,11 +10,20 @@ import {
 } from './tripParser.ts';
 import { appendDailyRows, overlandToDailyRows } from './overlandIngest.ts';
 import { generateSampleDays } from './seedData.ts';
-import { basicAuth } from './auth.ts';
-import { clientKey, rateLimit, TokenBuckets } from './rateLimit.ts';
+import { verifyPassword } from './auth.ts';
+import type { AuthStore } from './authStore.ts';
+import { clientKey, LoginLimiter, rateLimit, TokenBuckets } from './rateLimit.ts';
+import {
+  clearCookie,
+  decodeSession,
+  newSession,
+  readCookie,
+  renewal,
+  sessionCookie,
+} from './session.ts';
 import { sendJson, serveStatic } from './staticFiles.ts';
 import { createTileProxy } from './tileProxy.ts';
-import type { TripsResponse } from '../shared/types.ts';
+import type { SessionResponse, TripsResponse } from '../shared/types.ts';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -22,8 +31,10 @@ export interface AppOptions {
   dataDir: string;
   /** Serve this Vite build (prod). Without it, the caller adds the Vite dev middleware. */
   distDir?: string;
-  /** Basic auth credentials; without them nothing is protected (dev only) */
-  auth?: { user: string; hash: string };
+  /** The login (auth.json). Without it nothing is protected (NO_LOGIN=true, or dev) */
+  auth?: AuthStore;
+  /** Wait after a wrong password (default 1000 ms) */
+  loginFailureDelayMs?: number;
   /** Enables POST /api/overland */
   overlandToken?: string;
   /** Enables POST /api/seed */
@@ -57,8 +68,8 @@ export function createApp(opts: AppOptions): CreatedApp {
 
   const apiLimit = new TokenBuckets(10, 20);
   const overlandLimit = new TokenBuckets(2, 10);
-  // Wrong passwords: 1 per second, 10 in a burst (each costs an scrypt)
-  const authFailures = new TokenBuckets(1, 10);
+  const loginLimit = new LoginLimiter();
+  const failureDelayMs = opts.loginFailureDelayMs ?? 1000;
 
   app.use((req, res, next) => {
     res.set(SECURITY_HEADERS);
@@ -114,15 +125,101 @@ export function createApp(opts: AppOptions): CreatedApp {
 
   app.use('/api/', rateLimit(apiLimit));
 
-  // Location history is sensitive: everything below requires login
-  if (opts.auth) {
-    app.use(
-      basicAuth({
-        ...opts.auth,
-        allowAttempt: (req) => authFailures.has(clientKey(req)),
-        onFailure: (req) => authFailures.take(clientKey(req)),
-      }),
-    );
+  /**
+   * Login. The page and its scripts load without one (they hold no data) and show the login
+   * screen; /api/ and /tiles/ need a session cookie. A 401 here never sends WWW-Authenticate,
+   * so the browser doesn't show its own sign-in popup.
+   */
+  const store = opts.auth;
+  const nowSecs = () => Math.floor(Date.now() / 1000);
+
+  /** Logged in (renewing an old browser session), or not */
+  const checkSession = (req: express.Request, res: express.Response): boolean => {
+    if (!store) return true;
+    const secrets = store.get();
+    const token = readCookie(req.get('cookie'));
+    if (!secrets || !token) return false;
+    const session = decodeSession(token, secrets.sessionSecret, nowSecs());
+    if (!session) return false;
+    const renewed = renewal(session, nowSecs());
+    if (renewed) res.append('Set-Cookie', sessionCookie(renewed, secrets.sessionSecret));
+    return true;
+  };
+
+  /** POSTs must be JSON (forces a CORS preflight cross-site) and, when sent, from this origin */
+  const sameOrigin = (req: express.Request) => {
+    if (!req.is('application/json')) return false;
+    const origin = req.get('origin');
+    if (!origin) return true;
+    try {
+      return new URL(origin).host === req.get('host');
+    } catch {
+      return false;
+    }
+  };
+
+  app.get('/api/session', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const body: SessionResponse = store
+      ? checkSession(req, res)
+        ? { loginRequired: true, authenticated: true, user: store.get()?.user }
+        : { loginRequired: true, authenticated: false }
+      : { loginRequired: false, authenticated: true };
+    res.json(body);
+  });
+
+  app.post('/api/login', express.json({ limit: '2kb' }), async (req, res) => {
+    if (!store) return res.status(404).json({ error: 'Login is turned off' });
+    if (!sameOrigin(req)) return res.status(403).json({ error: 'Forbidden' });
+    const key = clientKey(req);
+    const blockedMs = loginLimit.blockedFor(key);
+    if (blockedMs > 0) {
+      res.set('Retry-After', String(Math.ceil(blockedMs / 1000)));
+      return res.status(429).json({ error: 'Too many wrong passwords. Try again in 15 minutes.' });
+    }
+    const secrets = store.get();
+    if (!secrets) return res.status(503).json({ error: 'The login file is missing or broken; see the server log' });
+
+    const { user, password, remember } = req.body ?? {};
+    if (typeof user !== 'string' || typeof password !== 'string' || password.length > 1024) {
+      return res.status(400).json({ error: 'Enter your user name and password' });
+    }
+    try {
+      // Always run scrypt so a wrong user takes as long as a wrong password
+      const passOk = await verifyPassword(password, secrets.parsedHash);
+      const sha = (v: string) => crypto.createHash('sha256').update(v).digest();
+      const userOk = crypto.timingSafeEqual(sha(user.trim()), sha(secrets.user));
+      if (passOk && userOk) {
+        loginLimit.succeed(key);
+        const session = newSession(remember === true ? 'remember' : 'browser', nowSecs());
+        res.set('Set-Cookie', sessionCookie(session, secrets.sessionSecret));
+        return res.json({ ok: true });
+      }
+    } catch (err) {
+      console.error('Error in /api/login:', err);
+      return res.status(500).json({ error: 'Login failed' });
+    }
+    const nowBlocked = loginLimit.fail(key);
+    await new Promise((r) => setTimeout(r, failureDelayMs));
+    if (nowBlocked) {
+      res.set('Retry-After', String(LoginLimiter.BLOCK_MS / 1000));
+      return res.status(429).json({ error: 'Too many wrong passwords. Try again in 15 minutes.' });
+    }
+    res.status(401).json({ error: 'Wrong user name or password' });
+  });
+
+  app.post('/api/logout', express.json({ limit: '1kb' }), (req, res) => {
+    if (!sameOrigin(req)) return res.status(403).json({ error: 'Forbidden' });
+    res.set('Set-Cookie', clearCookie());
+    res.json({ ok: true });
+  });
+
+  // Location history is sensitive: everything below on /api/ and /tiles/ needs a session
+  if (store) {
+    const requireSession: express.RequestHandler = (req, res, next) =>
+      checkSession(req, res) ? next() : res.status(401).json({ error: 'Log in first' });
+    app.use('/api/', requireSession);
+    app.use('/tiles/', requireSession);
   }
 
   /**
@@ -284,7 +381,7 @@ export function createApp(opts: AppOptions): CreatedApp {
     sweep: () => {
       apiLimit.sweep();
       overlandLimit.sweep();
-      authFailures.sweep();
+      loginLimit.sweep();
     },
   };
 }

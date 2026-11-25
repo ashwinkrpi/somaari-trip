@@ -44,7 +44,7 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
 
 1. **Phone (Overland iOS)** logs GPS points in the background and POSTs them in batches (JSON
    `locations` array) to `/api/overland`, with a bearer token, over your LAN or a private network.
-2. **Ingest** (only when `OVERLAND_TOKEN` is set; token instead of basic auth, 5 MB body limit,
+2. **Ingest** (only when `OVERLAND_TOKEN` is set; token instead of the login, 5 MB body limit,
    own rate limit) buckets each point by its **IST** date and appends rows to
    `trips_YYYY-MM-DD.csv`, writing the header for a new file. It replies only after the rows are
    on disk; on failure it returns 500 so Overland keeps the batch and retries.
@@ -60,8 +60,8 @@ published on `SOMAARI_TRIP_BIND:SOMAARI_TRIP_PORT` (default `127.0.0.1:18473`).
      a point is stationary when `motion` says so, or its speed is 0 with accuracy within 30 m.
    - Days are **IST days**, and files are named by IST date, so day D is read from file D alone.
      A trip crossing midnight is split between both days.
-5. **Web**: basic auth on everything except `/api/overland` and `/api/health`; serves the built
-   React app (precompressed `.br`/`.gz`, hashed assets cached `immutable`); proxies `/tiles/osm/` to
+5. **Web**: the login screen and session cookie guard `/api/` and `/tiles/` (all but
+   `/api/overland`, `/api/health` and the login itself); serves the built React app (precompressed `.br`/`.gz`, hashed assets cached `immutable`); proxies `/tiles/osm/` to
    OpenStreetMap with a disk cache (`tile-cache` volume, 1 GB cap); security headers, a strict CSP and
    per-IP rate limits.
 6. **Browser** (React + Leaflet) loads the day list, then that day's trips and stops, and draws
@@ -147,9 +147,9 @@ Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app)
 
 | Layer | Protection |
 |---|---|
-| **Login** | Basic auth (scrypt hash in `.env`) on every route that reads data. The app won't start in production without it, unless `NO_LOGIN=true` turns it off on purpose |
+| **Login** | Its own login screen and a signed session cookie on every route that reads data. One user, scrypt hash in `auth.json`, reset with `setpassword` on the server. `NO_LOGIN=true` turns it off on purpose |
 | **Overland** | Its own bearer token, compared in constant time, 5 MB body limit |
-| **Limits** | Per-IP rate limits and server timeouts; wrong passwords are limited before scrypt runs |
+| **Limits** | Per-IP rate limits and server timeouts; 5 wrong passwords in 15 minutes block an address for 15 minutes |
 | **Container** | Non-root user, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
 
 <details>
@@ -158,9 +158,16 @@ Everything else, with screenshots: [Using the app](docs/GUIDE.md#-using-the-app)
 <br>
 
 There's no reverse proxy in front: Express does the login, limits and headers itself.
-- **Login**: basic auth is checked before any route that reads data, with a constant-time
-  compare. Wrong passwords have their own rate limit, checked before scrypt runs, and a header
-  that verified once is remembered so scrypt runs once per session.
+- **Login**: `POST /api/login` checks the user name and scrypt password (scrypt runs for a wrong
+  user too, and the compare is constant-time) and sets an HMAC-signed `HttpOnly`,
+  `SameSite=Strict` cookie: 30 days with **Keep me logged in**, otherwise a browser session that
+  ends after a day unused. No sessions are stored; `setpassword` and `logout-all` rotate the
+  signing secret in `auth.json`, which ends them all, and the server notices the file change on
+  its next request. A missing or broken `auth.json` locks everything (fail closed). Login and
+  logout only accept JSON from the app's own origin. 5 wrong passwords from one address in 15
+  minutes block it for 15 minutes, checked before scrypt runs, and each wrong one waits a
+  second. The page and its scripts load without a login (they hold no data) so the login screen
+  can show; a 401 never sends `WWW-Authenticate`, so the browser shows no popup.
 - **Limits**: per-IP token buckets (10 r/s burst 20 for `/api/`, 2 r/s burst 10 for
   `/api/overland`), 5 MB Overland body limit, server timeouts (headers 10 s, request 30 s,
   keep-alive 5 s).
@@ -184,11 +191,14 @@ There's no reverse proxy in front: Express does the login, limits and headers it
 | `GET /api/trips?date=YYYY-MM-DD` | That day's trips (GeoJSON lines, split at gaps over 5 min), stops and a summary. With no date, the latest day |
 | `GET /api/trips?from=…&to=…` | The same for a range of days (either end may be left out) |
 | `…&max_accuracy=50` | Drops points less accurate than this many metres (default 50) |
+| `GET /api/session` | `{"loginRequired", "authenticated", "user"}`, no login needed |
+| `POST /api/login` | JSON `{"user", "password", "remember"}`; sets the session cookie. 401 wrong, 429 blocked |
+| `POST /api/logout` | Clears the session cookie |
 | `GET /api/health` | `{"status":"ok", …}`, no login needed |
 | `POST /api/overland` | Overland batch upload (bearer token, not the login). 401 bad token, 400 no `locations` array, `{"result":"ok"}` once on disk, 500 if the write failed |
 | `POST /api/seed` | Rewrites the sample days. Only exists when `SEED_SAMPLE_DATA=true` (dev) |
 
-All but `/api/health` and `/api/overland` need the login. Dates that aren't `YYYY-MM-DD` get a
+All but `/api/health`, `/api/overland` and the session endpoints need the login (401 without it). Dates that aren't `YYYY-MM-DD` get a
 400, too many requests a 429 with `Retry-After`. CSV columns:
 [Data files](docs/GUIDE.md#data-files).
 
@@ -197,6 +207,7 @@ All but `/api/health` and `/api/overland` need the login. Dates that aren't `YYY
 ```sh
 npm ci
 SEED_SAMPLE_DATA=true npm run dev   # API + Vite on 127.0.0.1:3000, sample data in ./data-dev, no login
+npm run setpassword                 # turn the login on in dev (writes ./data-dev/auth.json; restart dev)
 npm run lint                        # tsc --noEmit
 npm test                            # vitest
 npm run build                       # frontend + bundled server into dist/
@@ -205,7 +216,7 @@ node scripts/sample-routes.mjs      # refetch the sample trips' road geometry (O
 ```
 
 The dev server reads `./data-dev` and fetches map tiles directly; production reads `./data`, serves
-`dist/` and proxies tiles. `AUTH_USER`/`AUTH_HASH` in the shell turn the login on in dev too. Built with
+`dist/` and proxies tiles. Dev has a login only once `./data-dev/auth.json` exists. Built with
 TypeScript, Express, React, Leaflet, Tailwind CSS and PapaParse. Screenshots in `docs/images/`
 are taken from sample data only, never real location history: `npm run screenshots` runs the
 production build on generated sample data in a temp dir with a throwaway login, and drives

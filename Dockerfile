@@ -27,6 +27,9 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 COPY --from=build /app/dist ./dist
+# `somaari-trip setpassword` / `logout-all` via docker exec, run from /app so it finds data/
+RUN printf '#!/bin/sh\ncd /app && exec node dist/server.cjs "$@"\n' > /usr/local/bin/somaari-trip \
+ && chmod 755 /usr/local/bin/somaari-trip
 # Owned by the app user so a fresh tile-cache volume is writable
 RUN mkdir -p data cache/tiles && chown -R ${APP_UID}:${APP_GID} data cache
 

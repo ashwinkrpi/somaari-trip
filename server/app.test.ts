@@ -6,16 +6,39 @@ import zlib from 'zlib';
 import type { Server } from 'http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
+import type express from 'express';
 import { hashPassword } from './auth.ts';
-import { TokenBuckets } from './rateLimit.ts';
+import { AuthStore, logoutAll, writeAuthFile } from './authStore.ts';
+import { LoginLimiter, TokenBuckets } from './rateLimit.ts';
 
 const TOKEN = 'overland-test-token';
 const JS = 'console.log("hello");'.repeat(100);
 
+const USER = 'owner';
+const PASSWORD = 'correct horse battery';
+
 let tmp: string;
-let server: Server;
+let authFile: string;
 let base: string;
-let basic: string;
+let cookie: string;
+const servers: Server[] = [];
+
+async function listen(app: express.Express): Promise<string> {
+  const srv = app.listen(0, '127.0.0.1');
+  servers.push(srv);
+  await new Promise((r) => srv.once('listening', r));
+  return `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+}
+
+const appOptions = (dataDir: string, distDir: string) => ({
+  dataDir,
+  distDir,
+  auth: new AuthStore(authFile),
+  loginFailureDelayMs: 0,
+  overlandToken: TOKEN,
+  csp: true,
+  tileCacheDir: path.join(tmp, 'tiles'),
+});
 
 beforeAll(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'somaari-app-'));
@@ -30,53 +53,131 @@ beforeAll(async () => {
   fs.writeFileSync(path.join(distDir, 'assets/app-abc.js.gz'), zlib.gzipSync(JS));
 
   // Low scrypt cost keeps the tests fast
-  const hash = await hashPassword('correct horse battery', 1024);
-  basic = 'Basic ' + Buffer.from('owner:correct horse battery').toString('base64');
+  authFile = path.join(dataDir, 'auth.json');
+  writeAuthFile(authFile, USER, await hashPassword(PASSWORD, 1024));
 
-  const { app } = createApp({
-    dataDir,
-    distDir,
-    auth: { user: 'owner', hash },
-    overlandToken: TOKEN,
-    csp: true,
-    tileCacheDir: path.join(tmp, 'tiles'),
-  });
-  server = app.listen(0, '127.0.0.1');
-  await new Promise((r) => server.once('listening', r));
-  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  base = await listen(createApp(appOptions(dataDir, distDir)).app);
+  cookie = await login(base);
 });
 
 afterAll(() => {
-  server?.close();
+  for (const s of servers) s.close();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-const get = (p: string, headers: Record<string, string> = {}) => fetch(base + p, { headers });
+const get = (p: string, headers: Record<string, string> = {}, at = base) => fetch(at + p, { headers });
 
-describe('basic auth', () => {
-  it('rejects requests without credentials', async () => {
-    for (const p of ['/', '/api/days', '/assets/app-abc.js']) {
+const postJson = (p: string, body: unknown, headers: Record<string, string> = {}, at = base) =>
+  fetch(at + p, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+/** Logs in and returns the Cookie header to send */
+async function login(at: string, remember = false): Promise<string> {
+  const res = await postJson('/api/login', { user: USER, password: PASSWORD, remember }, {}, at);
+  expect(res.status).toBe(200);
+  return res.headers.get('set-cookie')!.split(';')[0];
+}
+
+describe('login', () => {
+  it('serves the app without a login, but no data', async () => {
+    expect((await get('/')).status).toBe(200);
+    expect((await get('/assets/app-abc.js')).status).toBe(200);
+    for (const p of ['/api/days', '/api/trips', '/tiles/osm/1/0/0.png']) {
       const res = await get(p);
       expect(res.status).toBe(401);
-      expect(res.headers.get('www-authenticate')).toMatch(/^Basic realm=/);
+      // No WWW-Authenticate, so the browser doesn't show its own popup
+      expect(res.headers.get('www-authenticate')).toBeNull();
     }
   });
 
-  it('rejects a wrong password or user', async () => {
-    const wrongPass = 'Basic ' + Buffer.from('owner:nope').toString('base64');
-    const wrongUser = 'Basic ' + Buffer.from('other:correct horse battery').toString('base64');
-    expect((await get('/api/days', { authorization: wrongPass })).status).toBe(401);
-    expect((await get('/api/days', { authorization: wrongUser })).status).toBe(401);
+  it('reports the session state', async () => {
+    expect(await (await get('/api/session')).json()).toEqual({ loginRequired: true, authenticated: false });
+    expect(await (await get('/api/session', { cookie })).json()).toEqual({
+      loginRequired: true,
+      authenticated: true,
+      user: USER,
+    });
   });
 
-  it('accepts the right credentials', async () => {
-    const res = await get('/api/days', { authorization: basic });
+  it('rejects a wrong password or user', async () => {
+    for (const body of [
+      { user: USER, password: 'nope nope nope' },
+      { user: 'other', password: PASSWORD },
+      { user: USER },
+    ]) {
+      const res = await postJson('/api/login', body);
+      expect([400, 401]).toContain(res.status);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    }
+  });
+
+  it('sets an HttpOnly SameSite=Strict cookie, kept 30 days only when asked', async () => {
+    const res = await postJson('/api/login', { user: USER, password: PASSWORD });
+    const set = res.headers.get('set-cookie')!;
+    expect(set).toMatch(/^somaari_trip_session=[^;]+; Path=\/; HttpOnly; SameSite=Strict$/);
+    const remembered = await postJson('/api/login', { user: USER, password: PASSWORD, remember: true });
+    expect(remembered.headers.get('set-cookie')).toMatch(/; Max-Age=2592000$/);
+  });
+
+  it('accepts the session cookie', async () => {
+    const res = await get('/api/days', { cookie });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ success: true, count: 0 });
   });
 
+  it('rejects a tampered cookie', async () => {
+    const tampered = cookie.replace(/.$/, (c) => (c === '0' ? '1' : '0'));
+    expect((await get('/api/days', { cookie: tampered })).status).toBe(401);
+  });
+
+  it('only takes JSON logins from its own origin', async () => {
+    const form = await fetch(base + '/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `user=${USER}&password=${encodeURIComponent(PASSWORD)}`,
+    });
+    expect(form.status).toBe(403);
+    const crossSite = await postJson('/api/login', { user: USER, password: PASSWORD }, { origin: 'http://evil.test' });
+    expect(crossSite.status).toBe(403);
+  });
+
+  it('logs out by clearing the cookie', async () => {
+    const res = await postJson('/api/logout', {}, { cookie });
+    expect(res.headers.get('set-cookie')).toMatch(/^somaari_trip_session=; .*Max-Age=0/);
+  });
+
   it('leaves health open', async () => {
     expect((await get('/api/health')).status).toBe(200);
+  });
+
+  it('ends every session when auth.json changes (logout-all, setpassword)', async () => {
+    const before = await login(base);
+    expect((await get('/api/days', { cookie: before })).status).toBe(200);
+    logoutAll(authFile);
+    expect((await get('/api/days', { cookie: before })).status).toBe(401);
+    cookie = await login(base);
+  });
+
+  it('fails closed when auth.json is missing', async () => {
+    const saved = fs.readFileSync(authFile);
+    fs.rmSync(authFile);
+    try {
+      expect((await get('/api/days', { cookie })).status).toBe(401);
+      expect((await postJson('/api/login', { user: USER, password: PASSWORD })).status).toBe(503);
+    } finally {
+      fs.writeFileSync(authFile, saved, { mode: 0o600 });
+    }
+  });
+});
+
+describe('no login (NO_LOGIN=true)', () => {
+  it('serves data without a cookie', async () => {
+    const at = await listen(createApp({ dataDir: path.join(tmp, 'data') }).app);
+    expect((await get('/api/days', {}, at)).status).toBe(200);
+    expect(await (await get('/api/session', {}, at)).json()).toEqual({ loginRequired: false, authenticated: true });
   });
 });
 
@@ -88,16 +189,16 @@ describe('overland', () => {
       body: JSON.stringify({ locations: [] }),
     });
 
-  it('needs its token, not basic auth', async () => {
+  it('needs its token, not the login', async () => {
     expect((await post({})).status).toBe(401);
-    expect((await post({ authorization: basic })).status).toBe(401);
+    expect((await post({ cookie })).status).toBe(401);
     expect((await post({ authorization: `Bearer ${TOKEN}` })).status).toBe(200);
   });
 });
 
 describe('headers', () => {
   it('sets security headers and CSP on every response', async () => {
-    for (const res of [await get('/'), await get('/', { authorization: basic })]) {
+    for (const res of [await get('/'), await get('/', { cookie })]) {
       expect(res.headers.get('x-content-type-options')).toBe('nosniff');
       expect(res.headers.get('x-frame-options')).toBe('DENY');
       expect(res.headers.get('referrer-policy')).toBe('no-referrer');
@@ -111,7 +212,7 @@ describe('headers', () => {
 describe('static files', () => {
   it('serves the precompressed variant the client accepts', async () => {
     for (const enc of ['br', 'gzip']) {
-      const res = await get('/assets/app-abc.js', { authorization: basic, 'accept-encoding': enc });
+      const res = await get('/assets/app-abc.js', { cookie, 'accept-encoding': enc });
       expect(res.status).toBe(200);
       expect(res.headers.get('content-encoding')).toBe(enc);
       expect(res.headers.get('content-type')).toMatch(/javascript/);
@@ -122,14 +223,14 @@ describe('static files', () => {
   });
 
   it('serves the plain file without Accept-Encoding', async () => {
-    const res = await get('/assets/app-abc.js', { authorization: basic, 'accept-encoding': 'identity' });
+    const res = await get('/assets/app-abc.js', { cookie, 'accept-encoding': 'identity' });
     expect(res.headers.get('content-encoding')).toBeNull();
     expect(res.headers.get('content-length')).toBe(String(JS.length));
   });
 
   it('falls back to index.html (no-cache) and never serves the server bundle', async () => {
     for (const p of ['/', '/some/route', '/server.cjs']) {
-      const res = await get(p, { authorization: basic });
+      const res = await get(p, { cookie });
       expect(res.status).toBe(200);
       expect(res.headers.get('cache-control')).toBe('no-cache');
       expect(await res.text()).toContain('id="root"');
@@ -138,11 +239,11 @@ describe('static files', () => {
 
   it('puts tiles behind login and 404s disallowed tile paths', async () => {
     expect((await get('/tiles/osm/1/0/0.png')).status).toBe(401);
-    expect((await get('/tiles/light_all/1/0/0.png', { authorization: basic })).status).toBe(404);
+    expect((await get('/tiles/light_all/1/0/0.png', { cookie })).status).toBe(404);
   });
 
   it('returns 404 JSON for unknown API paths', async () => {
-    const res = await get('/api/nope', { authorization: basic });
+    const res = await get('/api/nope', { cookie });
     expect(res.status).toBe(404);
   });
 });
@@ -154,12 +255,42 @@ describe('rate limit', () => {
     expect(statuses).toContain(429);
   });
 
-  it('limits wrong passwords before running scrypt', async () => {
-    const wrong = 'Basic ' + Buffer.from('owner:guess').toString('base64');
+  it('blocks a client after 5 wrong passwords, even for the right one', async () => {
+    const at = await listen(createApp(appOptions(path.join(tmp, 'data'), path.join(tmp, 'dist'))).app);
     const statuses: number[] = [];
-    for (let i = 0; i < 12; i++) statuses.push((await get('/', { authorization: wrong })).status);
-    expect(statuses.slice(0, 8)).toEqual(Array(8).fill(401));
-    expect(statuses.at(-1)).toBe(429);
+    for (let i = 0; i < 5; i++) {
+      statuses.push((await postJson('/api/login', { user: USER, password: 'guess guess guess' }, {}, at)).status);
+    }
+    expect(statuses).toEqual([401, 401, 401, 401, 429]);
+    const right = await postJson('/api/login', { user: USER, password: PASSWORD }, {}, at);
+    expect(right.status).toBe(429);
+    expect(Number(right.headers.get('retry-after'))).toBeGreaterThan(800);
+  });
+});
+
+describe('LoginLimiter', () => {
+  it('blocks for 15 minutes after 5 failures within 15 minutes', () => {
+    let now = 0;
+    const l = new LoginLimiter(() => now);
+    for (let i = 0; i < 4; i++) expect(l.fail('a')).toBe(false);
+    expect(l.blockedFor('b')).toBe(0);
+    expect(l.fail('a')).toBe(true);
+    expect(l.blockedFor('a')).toBe(15 * 60_000);
+    now = 15 * 60_000;
+    expect(l.blockedFor('a')).toBe(0);
+  });
+
+  it('forgets old failures and clears on success', () => {
+    let now = 0;
+    const l = new LoginLimiter(() => now);
+    for (let i = 0; i < 4; i++) l.fail('a');
+    now = 16 * 60_000;
+    expect(l.fail('a')).toBe(false);
+    l.succeed('a');
+    for (let i = 0; i < 4; i++) expect(l.fail('a')).toBe(false);
+    now = 40 * 60_000;
+    l.sweep();
+    expect(l.size).toBe(0);
   });
 });
 

@@ -2,8 +2,8 @@
 // Usage: npm run screenshots (builds first). Needs Chromium (CHROMIUM=/path to override).
 //
 // Runs the production build (dist/) from a temp dir with SEED_SAMPLE_DATA=true, so it only ever
-// sees sample data and a temp tile cache, never ./data or DATA_DIR. Login is a throwaway random
-// password. Drives the system Chromium with playwright-core (no browser download).
+// sees sample data and a temp tile cache, never ./data or DATA_DIR. The login is a throwaway random
+// password in the temp dir's auth.json. Drives the system Chromium with playwright-core (no browser download).
 import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -51,33 +51,31 @@ async function waitFor(check, what, timeoutMs = 30_000) {
   }
 }
 
-function startServer(tmp, port, authUser, authHash) {
-  fs.symlinkSync(path.join(ROOT, 'dist'), path.join(tmp, 'dist'));
-  // A minimal env: nothing from the caller's shell (DATA_DIR, OVERLAND_TOKEN, ...) reaches it
-  const server = spawn(process.execPath, [path.join(ROOT, 'dist', 'server.cjs')], {
+// A minimal env: nothing from the caller's shell (DATA_DIR, OVERLAND_TOKEN, AUTH_*, ...) reaches it
+const serverEnv = (port) => ({
+  PATH: process.env.PATH,
+  NODE_ENV: 'production',
+  PORT: String(port),
+  SEED_SAMPLE_DATA: 'true',
+});
+
+function startServer(tmp, port) {
+  return spawn(process.execPath, [path.join(ROOT, 'dist', 'server.cjs')], {
     cwd: tmp,
-    env: {
-      PATH: process.env.PATH,
-      NODE_ENV: 'production',
-      PORT: String(port),
-      AUTH_USER: authUser,
-      AUTH_HASH: authHash,
-      SEED_SAMPLE_DATA: 'true',
-    },
+    env: serverEnv(port),
     stdio: ['ignore', 'inherit', 'inherit'],
   });
-  return server;
 }
 
-function hashPassword(user, password) {
-  const res = spawnSync(path.join(ROOT, 'node_modules', '.bin', 'tsx'), ['scripts/hash-password.ts', user], {
-    cwd: ROOT,
+/** Writes tmp/data/auth.json with the same command users run */
+function setPassword(tmp, user, password) {
+  const res = spawnSync(process.execPath, [path.join(ROOT, 'dist', 'server.cjs'), 'setpassword', '--user', user], {
+    cwd: tmp,
+    env: serverEnv(0),
     input: `${password}\n`,
     encoding: 'utf8',
   });
-  const hash = /^AUTH_HASH=(.+)$/m.exec(res.stdout ?? '')?.[1];
-  if (res.status !== 0 || !hash) throw new Error(`hash-password failed: ${res.stderr}`);
-  return hash;
+  if (res.status !== 0) throw new Error(`setpassword failed: ${res.stderr}`);
 }
 
 async function main() {
@@ -97,11 +95,12 @@ async function main() {
   try {
     const user = 'demo';
     const password = crypto.randomBytes(18).toString('base64url');
-    const authHeader = `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`;
     const port = await freePort();
     const base = `http://127.0.0.1:${port}`;
 
-    children.push(startServer(tmp, port, user, hashPassword(user, password)));
+    fs.symlinkSync(path.join(ROOT, 'dist'), path.join(tmp, 'dist'));
+    setPassword(tmp, user, password);
+    children.push(startServer(tmp, port));
     await waitFor(async () => (await fetch(`${base}/api/health`)).ok, 'the server');
 
     const browser = await chromium.launch({ executablePath: CHROMIUM });
@@ -118,10 +117,10 @@ async function main() {
       await sleep(600);
     };
 
-    /** A fresh page at this viewport, signed in, with the app loaded and the map settled */
-    const load = async (device) => {
+    /** A fresh page at this viewport on the login screen */
+    const openLogin = async (device) => {
       await page?.context().close();
-      const context = await browser.newContext({ ...device, extraHTTPHeaders: { Authorization: authHeader } });
+      const context = await browser.newContext(device);
       await context.addInitScript((css) => {
         document.addEventListener('DOMContentLoaded', () => {
           const s = document.createElement('style');
@@ -131,6 +130,15 @@ async function main() {
       }, HIDE_CSS);
       page = await context.newPage();
       await page.goto(`${base}/`);
+      await page.locator('#login-form').waitFor();
+    };
+
+    /** A fresh page at this viewport, logged in, with the app loaded and the map settled */
+    const load = async (device) => {
+      await openLogin(device);
+      await page.fill('#login-user', user);
+      await page.fill('#login-password', password);
+      await page.click('#login-form button[type=submit]');
       await page.waitForFunction(() => document.querySelectorAll('#somaari-trip-sidebar button').length > 6);
       // The newest day is selected and drawn once the days list loads
       await page.locator('#leaflet-map-canvas canvas').first().waitFor();
@@ -152,6 +160,12 @@ async function main() {
     };
 
     const sidebarTab = (label) => click('#somaari-trip-sidebar button', `^${label}`);
+
+    // Login screen, with the user name typed in (the password field stays empty)
+    await openLogin(DESKTOP);
+    await page.fill('#login-user', 'admin');
+    await page.locator('#login-user').blur();
+    await shoot('login');
 
     // Desktop
     await load(DESKTOP);

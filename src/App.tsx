@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { DaySummary, TripsResponse, TripFeature, StopFeature } from '../shared/types.ts';
+import { DaySummary, SessionResponse, TripsResponse, TripFeature, StopFeature } from '../shared/types.ts';
 import { Sidebar } from './components/Sidebar.tsx';
 import { MapViewer } from './components/MapViewer.tsx';
 import { TripStatsBar } from './components/TripStatsBar.tsx';
+import { LoginScreen } from './components/LoginScreen.tsx';
 import { Menu, X } from 'lucide-react';
 
 const EMPTY_TRIPS: TripsResponse = {
@@ -72,7 +73,62 @@ function summarizeTrips(
   };
 }
 
+type AuthState = { status: 'checking' } | { status: 'login'; notice?: string } | { status: 'in'; loginRequired: boolean };
+
+/** Shows the login screen until there's a session (or the server has no login) */
 export default function App() {
+  const [auth, setAuth] = useState<AuthState>({ status: 'checking' });
+
+  const checkSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/session', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const s: SessionResponse = await res.json();
+      setAuth(s.authenticated ? { status: 'in', loginRequired: s.loginRequired } : { status: 'login' });
+    } catch (err) {
+      console.error('Failed to check the session:', err);
+      setAuth({ status: 'login', notice: 'Could not reach the server. Try again.' });
+    }
+  }, []);
+
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    } finally {
+      setAuth({ status: 'login' });
+    }
+  }, []);
+
+  const handleUnauthorized = useCallback(() => {
+    setAuth({ status: 'login', notice: 'Your session ended. Log in again.' });
+  }, []);
+
+  if (auth.status === 'checking') {
+    return <div className="h-screen w-screen bg-neutral-950" />;
+  }
+  if (auth.status === 'login') {
+    return <LoginScreen notice={auth.notice} onLoggedIn={checkSession} />;
+  }
+  return (
+    <TripViewer
+      onLogout={auth.loginRequired ? handleLogout : undefined}
+      onUnauthorized={handleUnauthorized}
+    />
+  );
+}
+
+interface TripViewerProps {
+  /** Only when the server has a login */
+  onLogout?: () => void;
+  /** An API call returned 401: the session ended */
+  onUnauthorized: () => void;
+}
+
+function TripViewer({ onLogout, onUnauthorized }: TripViewerProps) {
   const [days, setDays] = useState<DaySummary[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedRange, setSelectedRange] = useState<{ from: string; to: string } | null>(null);
@@ -95,6 +151,7 @@ export default function App() {
     try {
       setIsLoading(true);
       const res = await fetch('/api/days');
+      if (res.status === 401) return onUnauthorized();
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.days && Array.isArray(data.days)) {
@@ -108,7 +165,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [onUnauthorized]);
 
   useEffect(() => {
     fetchDays();
@@ -141,6 +198,7 @@ export default function App() {
     (async () => {
       try {
         const res = await fetch(`/api/trips?${tripsQuery}`, { signal: controller.signal });
+        if (res.status === 401) return onUnauthorized();
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: TripsResponse = await res.json();
         setTripsData(data);
@@ -153,7 +211,7 @@ export default function App() {
     })();
 
     return () => controller.abort();
-  }, [tripsQuery, refreshKey]);
+  }, [tripsQuery, refreshKey, onUnauthorized]);
 
   const handleRefresh = () => {
     fetchDays();
@@ -258,6 +316,7 @@ export default function App() {
           onToggleModeFilter={handleToggleModeFilter}
           isLoading={isLoading}
           onRefreshDays={handleRefresh}
+          onLogout={onLogout}
         />
       </div>
 
